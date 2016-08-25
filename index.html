@@ -1,0 +1,618 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width"/>
+<title>WebGL</title>
+<style>
+
+html, body {
+	margin: 0; padding: 0;
+	overflow: hidden;
+}
+
+canvas {
+	position: fixed;
+	left: 0; right: 0;
+	top: 0; bottom: 0;
+}
+
+</style>
+</head>
+<body>
+<canvas id="Canvas">Sorry, this browser cannot render this content.</canvas>
+<script id="VertexShader" type="x-shader/x-vertex">
+
+attribute vec3 vertex;
+attribute vec3 normal;
+
+uniform mat4 pm;
+uniform mat4 vm;
+uniform mat4 mm;
+uniform vec3 light;
+varying float intensity;
+
+void main() {
+	intensity = dot(normalize(light - vertex), normal);
+	gl_Position = pm * vm * mm * vec4(vertex, 1.0);
+}
+
+</script>
+<script id="FragmentShader" type="x-shader/x-fragment">
+
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+varying float intensity;
+
+void main() {
+	gl_FragColor = vec4(vec3(.2, .4, .8) * intensity, 1.0);
+}
+
+</script>
+<script>
+
+"use strict"
+
+var M = Math,
+	D = document,
+	W = window,
+	canvas,
+	gl,
+	light,
+	cubeVertices,
+	cubeIndicies,
+	cubeNormals,
+	vertexLoc,
+	normalLoc,
+	pm,
+	vm,
+	mm,
+	program,
+	width,
+	height,
+	now,
+	factor,
+	last,
+	pointersLength,
+	pointersX = [],
+	pointersY = [],
+	keysDown = []
+
+function drawModel(matrix, vbo, ibo, nbo) {
+	gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+	gl.vertexAttribPointer(
+		vertexLoc,
+		3,
+		gl.FLOAT,
+		gl.FALSE,
+		0,
+		0)
+	gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
+	gl.vertexAttribPointer(
+		normalLoc,
+		3,
+		gl.FLOAT,
+		gl.FALSE,
+		0,
+		0)
+
+	var uniforms = program.uniforms;
+	gl.uniformMatrix4fv(
+		uniforms.pm,
+		gl.FALSE,
+		pm)
+	gl.uniformMatrix4fv(
+		uniforms.vm,
+		gl.FALSE,
+		vm)
+	gl.uniformMatrix4fv(
+		uniforms.mm,
+		gl.FALSE,
+		matrix)
+	gl.uniform3fv(
+		uniforms.light,
+		light)
+
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
+	//gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
+	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+}
+
+function rotate(out, a, rad, x, y, z) {
+	var len = M.sqrt(x * x + y * y + z * z),
+		s, c, t,
+		a00, a01, a02, a03,
+		a10, a11, a12, a13,
+		a20, a21, a22, a23,
+		b00, b01, b02,
+		b10, b11, b12,
+		b20, b21, b22
+
+	//if (M.abs(len) < glMatrix.EPSILON) { return null }
+
+	len = 1 / len
+	x *= len
+	y *= len
+	z *= len
+
+	s = M.sin(rad)
+	c = M.cos(rad)
+	t = 1 - c
+
+	a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3]
+	a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7]
+	a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11]
+
+	// construct the elements of the rotation matrix
+	b00 = x * x * t + c; b01 = y * x * t + z * s; b02 = z * x * t - y * s
+	b10 = x * y * t - z * s; b11 = y * y * t + c; b12 = z * y * t + x * s
+	b20 = x * z * t + y * s; b21 = y * z * t - x * s; b22 = z * z * t + c
+
+	// perform rotation-specific matrix multiplication
+	out[0] = a00 * b00 + a10 * b01 + a20 * b02
+	out[1] = a01 * b00 + a11 * b01 + a21 * b02
+	out[2] = a02 * b00 + a12 * b01 + a22 * b02
+	out[3] = a03 * b00 + a13 * b01 + a23 * b02
+	out[4] = a00 * b10 + a10 * b11 + a20 * b12
+	out[5] = a01 * b10 + a11 * b11 + a21 * b12
+	out[6] = a02 * b10 + a12 * b11 + a22 * b12
+	out[7] = a03 * b10 + a13 * b11 + a23 * b12
+	out[8] = a00 * b20 + a10 * b21 + a20 * b22
+	out[9] = a01 * b20 + a11 * b21 + a21 * b22
+	out[10] = a02 * b20 + a12 * b21 + a22 * b22
+	out[11] = a03 * b20 + a13 * b21 + a23 * b22
+
+	if (a !== out) {
+		// if the source and destination differ, copy the unchanged last row
+		out[12] = a[12]
+		out[13] = a[13]
+		out[14] = a[14]
+		out[15] = a[15]
+	}
+
+	return out
+}
+
+function scale(out, a, x, y, z) {
+	out[0] = a[0] * x
+	out[1] = a[1] * x
+	out[2] = a[2] * x
+	out[3] = a[3] * x
+	out[4] = a[4] * y
+	out[5] = a[5] * y
+	out[6] = a[6] * y
+	out[7] = a[7] * y
+	out[8] = a[8] * z
+	out[9] = a[9] * z
+	out[10] = a[10] * z
+	out[11] = a[11] * z
+	out[12] = a[12]
+	out[13] = a[13]
+	out[14] = a[14]
+	out[15] = a[15]
+
+	return out
+}
+
+function translate(out, a, x, y, z) {
+	var a00, a01, a02, a03,
+		a10, a11, a12, a13,
+		a20, a21, a22, a23
+
+	if (a === out) {
+		out[12] = a[0] * x + a[4] * y + a[8] * z + a[12]
+		out[13] = a[1] * x + a[5] * y + a[9] * z + a[13]
+		out[14] = a[2] * x + a[6] * y + a[10] * z + a[14]
+		out[15] = a[3] * x + a[7] * y + a[11] * z + a[15]
+	} else {
+		a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3]
+		a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7]
+		a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11]
+
+		out[0] = a00; out[1] = a01; out[2] = a02; out[3] = a03
+		out[4] = a10; out[5] = a11; out[6] = a12; out[7] = a13
+		out[8] = a20; out[9] = a21; out[10] = a22; out[11] = a23
+
+		out[12] = a00 * x + a10 * y + a20 * z + a[12]
+		out[13] = a01 * x + a11 * y + a21 * z + a[13]
+		out[14] = a02 * x + a12 * y + a22 * z + a[14]
+		out[15] = a03 * x + a13 * y + a23 * z + a[15]
+	}
+
+	return out
+}
+
+function multiply(out, a, b) {
+	var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
+		a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
+		a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
+		a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15]
+
+	// cache only the current line of the second matrix
+	var b0  = b[0], b1 = b[1], b2 = b[2], b3 = b[3]
+	out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30
+	out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31
+	out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32
+	out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33
+
+	b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7]
+	out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30
+	out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31
+	out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32
+	out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33
+
+	b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11]
+	out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30
+	out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31
+	out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32
+	out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33
+
+	b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15]
+	out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30
+	out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31
+	out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32
+	out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33
+
+	return out
+}
+
+/*function translate(m, x, y, z) {
+	mm[12] = x
+	mm[13] = y
+	mm[14] = z
+}
+
+function scale(m, x, y, z) {
+}
+
+function rotate(m, x, y, z) {
+}*/
+
+var out = []
+function draw() {
+	gl.clear(
+		gl.COLOR_BUFFER_BIT |
+		gl.DEPTH_BUFFER_BIT)
+
+	var now = Date.now();
+
+	gl.useProgram(program)
+	//mm[14] = -((Date.now() % 2000) / 100)
+	//rotate(mm, 0, 0, .31415);
+	//translate(mm, 0, 0, -10);
+	translate(out, mm, 0, 0, -10);
+	rotate(out, out, (now * .001) % 6.283, 0, 0, 1);
+	drawModel(out, cubeVertices, cubeIndicies, cubeNormals);
+}
+
+function input() {
+}
+
+function run() {
+	requestAnimationFrame(run)
+
+	now = Date.now()
+	factor = (now - last) / 16
+	last = now
+
+	input()
+	draw()
+}
+
+function setPointer(event, down) {
+	if (!down) {
+		pointersLength = event.touches ?
+			event.touches.length :
+			0
+	} else if (event.touches) {
+		var touches = event.touches
+
+		pointersLength = touches.length
+
+		for (var i = pointersLength; i--;) {
+			var t = touches[i]
+
+			pointersX[i] = t.pageX
+			pointersY[i] = t.pageY
+		}
+	} else {
+		pointersLength = 1
+		pointersX[0] = event.pageX
+		pointersY[0] = event.pageY
+	}
+
+	// map to WebGL coordinates
+	var xf = 2 / width,
+		yf = 2 / (height / width)
+
+	for (var i = pointersLength; i--;) {
+		pointersX[i] = pointersX[i]*xf - 1
+		pointersY[i] = pointersY[i]*yf - 1
+	}
+
+	event.preventDefault()
+}
+
+function pointerUp(event) {
+	setPointer(event, false)
+}
+
+function pointerMove(event) {
+	setPointer(event, pointersLength)
+}
+
+function pointerDown(event) {
+	setPointer(event, true)
+}
+
+function setKey(event, down) {
+	keysDown[event.keyCode] = down
+	event.preventDefault()
+}
+
+function keyUp(event) {
+	setKey(event, false)
+}
+
+function keyDown(event) {
+	setKey(event, true)
+}
+
+function compileShader(src, type) {
+	var shader = gl.createShader(type)
+
+	gl.shaderSource(shader, src)
+	gl.compileShader(shader)
+
+	return gl.getShaderParameter(shader, gl.COMPILE_STATUS) ?
+		shader :
+		null
+}
+
+function linkProgram(vs, fs) {
+	var p
+	if ((p = gl.createProgram())) {
+		gl.attachShader(p, vs)
+		gl.attachShader(p, fs)
+
+		gl.linkProgram(p)
+
+		if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+			gl.deleteProgram(p)
+			p = null
+		}
+	}
+
+	return p
+}
+
+function buildProgram(vertexSource, fragmentSource) {
+	var p, vs, fs
+	if ((vs = compileShader(vertexSource, gl.VERTEX_SHADER))) {
+		if ((fs = compileShader(fragmentSource, gl.FRAGMENT_SHADER ))) {
+			p = linkProgram(vs, fs)
+			gl.deleteShader(fs)
+		}
+
+		gl.deleteShader(vs)
+	}
+
+	return p
+}
+
+function resize() {
+	canvas.width = width = W.innerWidth
+	canvas.height = height = W.innerHeight
+
+	var fovy = 45,
+		aspect = width / height,
+		near = 0,
+		far = 100,
+		f = 1 / M.tan(fovy / 2)
+
+	pm = new Float32Array([
+		f/aspect, 0, 0, 0,
+		0, f, 0, 0,
+		0, 0, (far + near) / (near - far), -1,
+		0, 0, (2 * far * near) / (near - far), 0])
+
+	vm = new Float32Array([
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1])
+
+	mm = new Float32Array([
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1])
+
+	light = new Float32Array([2, 2, 2]);
+
+	gl.viewport(0, 0, width, height)
+}
+
+function cacheUniformLocation(program, name) {
+	if (program.uniforms === undefined) {
+		program.uniforms = {}
+	}
+
+	program.uniforms[name] = gl.getUniformLocation(program, name)
+}
+
+function cacheUniformLocations(program) {
+	cacheUniformLocation(program, "pm")
+	cacheUniformLocation(program, "vm")
+	cacheUniformLocation(program, "mm")
+	cacheUniformLocation(program, "light")
+}
+
+function cacheAttribLocations(program) {
+	vertexLoc = gl.getAttribLocation(
+		program,
+		"vertex")
+	gl.enableVertexAttribArray(vertexLoc)
+	normalLoc = gl.getAttribLocation(
+		program,
+		"normal")
+	gl.enableVertexAttribArray(normalLoc)
+}
+
+function initVertexBuffers() {
+	cubeVertices = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertices)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array([
+			// front
+			-1, -1, 1,
+			1, -1, 1,
+			-1, 1, 1,
+			1, 1, 1,
+			/*/ right
+			1, -1, 1,
+			1, -1, -1,
+			1, 1, 1,
+			1, 1, -1,
+			// back
+			1, -1, -1,
+			-1, -1, -1,
+			1, 1, -1,
+			-1, 1, -1,
+			// left
+			-1, -1, -1,
+			-1, -1, 1,
+			-1, 1, -1,
+			-1, 1, 1,
+			// bottom
+			-1, -1, -1,
+			1, -1, -1,
+			-1, -1, 1,
+			1, -1, 1,
+			// top
+			-1, 1, 1,
+			1, 1, 1,
+			-1, 1, -1,
+			1, 1, -1*/]),
+		gl.STATIC_DRAW)
+
+	cubeIndicies = gl.createBuffer()
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIndicies)
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+		new Uint16Array([
+			// front
+			0, 1, 3,
+			0, 3, 2,
+			/*/ right
+			4, 5, 7,
+			4, 7, 6,
+			// back
+			8, 9, 11,
+			8, 11, 10,
+			// left
+			12, 13, 15,
+			12, 15, 14,
+			// bottom
+			16, 17, 19,
+			16, 19, 18,
+			// top
+			20, 21, 23,
+			20, 23, 22*/]),
+		gl.STATIC_DRAW)
+
+	cubeNormals = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, cubeNormals)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array([
+			// front
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1,
+			/*/ right
+			1, 0, 0,
+			1, 0, 0,
+			1, 0, 0,
+			1, 0, 0,
+			// back
+			0, 0, -1,
+			0, 0, -1,
+			0, 0, -1,
+			0, 0, -1,
+			// left
+			-1, 0, 0,
+			-1, 0, 0,
+			-1, 0, 0,
+			-1, 0, 0,
+			// bottom
+			0, -1, 0,
+			0, -1, 0,
+			0, -1, 0,
+			0, -1, 0,
+			// top
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0,
+			0, 1, 0*/]),
+		gl.STATIC_DRAW)
+}
+
+function init() {
+	if (!(canvas = D.getElementById("Canvas"))) {
+		return
+	}
+
+	if (!(gl = canvas.getContext("webgl"))) {
+		alert("WebGL not available")
+		return
+	}
+
+	if (!(program = buildProgram(
+		D.getElementById("VertexShader").textContent,
+		D.getElementById("FragmentShader").textContent))) {
+		alert("GLSL program did not link")
+		return
+	}
+
+	gl.enable(gl.DEPTH_TEST);
+	gl.depthFunc(gl.LEQUAL);
+	gl.enable(gl.BLEND)
+	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+	gl.clearColor(0, 0, 0, 1)
+
+	initVertexBuffers()
+	cacheAttribLocations(program);
+	cacheUniformLocations(program)
+
+	W.onresize = resize
+	resize()
+
+	D.onkeydown = keyDown
+	D.onkeyup = keyUp
+
+	D.onmousedown = pointerDown
+	D.onmousemove = pointerMove
+	D.onmouseup = pointerUp
+	D.onmouseout = pointerUp
+
+	if ("ontouchstart" in D) {
+		D.ontouchstart = pointerDown
+		D.ontouchmove = pointerMove
+		D.ontouchend = pointerUp
+		D.ontouchleave = pointerUp
+		D.ontouchcancel = pointerUp
+	}
+
+	last = Date.now() - 16
+	run()
+}
+
+W.onload = init
+
+</script>
+</body>
+</html>
