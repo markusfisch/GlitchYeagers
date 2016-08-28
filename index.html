@@ -583,7 +583,8 @@ function init() {
 		return
 	}
 
-	if (!(gl = canvas.getContext("webgl"))) {
+	if (!(gl = canvas.getContext("webgl")) &&
+			!(gl = canvas.getContext("experimental-webgl"))) {
 		alert("WebGL not available")
 		return
 	}
