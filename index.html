@@ -25,29 +25,29 @@ canvas {
 
 attribute vec3 vertex;
 attribute vec3 normal;
-attribute vec4 color;
+//attribute vec4 color;
 
 uniform mat4 pm;
 uniform mat4 vm;
 uniform mat4 mm;
 uniform vec3 light;
 
-varying vec3 v_light;
-varying vec3 v_normal;
-varying vec4 v_color;
+varying float v_intensity;
+//varying vec4 v_color;
 
 void main() {
 	mat4 m = pm * vm * mm;
 	gl_Position = m * vec4(vertex, 1.0);
-	v_light = light;
 	// transpose() is not available in WebGL
 	mat4 transposed = mat4(
 		m[0][0], m[0][1], m[0][2], m[0][3],
 		m[1][0], m[1][1], m[1][2], m[1][3],
 		m[2][0], m[2][1], m[2][2], m[2][3],
 		m[3][0], m[3][1], m[3][2], m[3][3]);
-	v_normal = mat3(transposed) * normal;
-	v_color = color;
+	v_intensity = max(.0, dot(
+		normalize(mat3(transposed) * normal),
+		light));
+	//v_color = color;
 }
 
 </script>
@@ -59,14 +59,13 @@ precision highp float;
 precision mediump float;
 #endif
 
-varying vec3 v_light;
-varying vec3 v_normal;
-varying vec4 v_color;
+varying float v_intensity;
+//varying vec4 v_color;
 
 void main() {
 	//gl_FragColor = v_color * vec4(
 	gl_FragColor = vec4(
-		vec3(.3 + max(.0, dot(normalize(v_normal), v_light))),
+		vec3(.3 + v_intensity),
 		1.0);
 }
 
@@ -84,13 +83,14 @@ var M = Math,
 	cubeVertices,
 	cubeIndicies,
 	cubeNormals,
-cubeColors,
+//cubeColors,
 	vertexLoc,
 	normalLoc,
-colorLoc,
+//colorLoc,
 	pm,
 	vm,
 	mm,
+	m = [],
 	program,
 	width,
 	height,
@@ -103,7 +103,7 @@ colorLoc,
 	keysDown = []
 
 function drawModel(matrix, vbo, ibo, nbo) {
-	gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+	gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
 	gl.vertexAttribPointer(
 		vertexLoc,
 		3,
@@ -111,7 +111,7 @@ function drawModel(matrix, vbo, ibo, nbo) {
 		gl.FALSE,
 		0,
 		0)
-	gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
+	gl.bindBuffer(gl.ARRAY_BUFFER, nbo)
 	gl.vertexAttribPointer(
 		normalLoc,
 		3,
@@ -119,16 +119,16 @@ function drawModel(matrix, vbo, ibo, nbo) {
 		gl.FALSE,
 		0,
 		0)
-gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors);
+/*gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors)
 gl.vertexAttribPointer(
 	colorLoc,
 	4,
 	gl.FLOAT,
 	gl.FALSE,
 	0,
-	0)
+	0)*/
 
-	var uniforms = program.uniforms;
+	var uniforms = program.uniforms
 	gl.uniformMatrix4fv(
 		uniforms.pm,
 		gl.FALSE,
@@ -285,7 +285,6 @@ function multiply(out, a, b) {
 	return out
 }
 
-var m = []
 function draw() {
 	gl.clear(
 		gl.COLOR_BUFFER_BIT |
@@ -453,7 +452,7 @@ function resize() {
 		0, 0, 1, 0,
 		0, 0, 0, 1])
 
-	light = new Float32Array([0, .25, -1]);
+	light = new Float32Array([0, .25, -1])
 
 	gl.viewport(0, 0, width, height)
 }
@@ -482,10 +481,10 @@ function cacheAttribLocations(program) {
 		program,
 		"normal")
 	gl.enableVertexAttribArray(normalLoc)
-	colorLoc = gl.getAttribLocation(
+	/*colorLoc = gl.getAttribLocation(
 		program,
 		"color")
-	gl.enableVertexAttribArray(colorLoc)
+	gl.enableVertexAttribArray(colorLoc)*/
 }
 
 function initVertexBuffers() {
@@ -585,7 +584,7 @@ function initVertexBuffers() {
 			0, 1, 0]),
 		gl.STATIC_DRAW)
 
-var colors = [
+/*var colors = [
 [1.0,  1.0,  1.0,  1.0],    // vordere Fläche: weiß
 [1.0,  0.0,  0.0,  1.0],    // hintere Fläche: rot
 [0.0,  1.0,  0.0,  1.0],    // obere Fläche: grün
@@ -606,7 +605,7 @@ cubeColors = gl.createBuffer()
 gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors)
 gl.bufferData(gl.ARRAY_BUFFER,
 	new Float32Array(generatedColors),
-	gl.STATIC_DRAW)
+	gl.STATIC_DRAW)*/
 }
 
 function init() {
@@ -633,7 +632,7 @@ function init() {
 	gl.clearColor(0, 0, 0, 1)
 
 	initVertexBuffers()
-	cacheAttribLocations(program);
+	cacheAttribLocations(program)
 	cacheUniformLocations(program)
 
 	W.onresize = resize
