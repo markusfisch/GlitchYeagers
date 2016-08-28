@@ -38,7 +38,7 @@ void main() {
 	gl_Position = m * vec4(vertex, 1.0);
 	v_intensity = max(.0, dot(
 		normalize(mat3(
-			// transpose
+			// transpose matrix
 			m[0][0], m[0][1], m[0][2],
 			m[1][0], m[1][1], m[1][2],
 			m[2][0], m[2][1], m[2][2]) * normal),
@@ -83,7 +83,8 @@ var M = Math,
 	light = new Float32Array([.25, .25, -1]),
 	brightness = 1,
 	program,
-	cube = {},
+	cube,
+	tri,
 	width,
 	height,
 	now,
@@ -132,8 +133,16 @@ function drawModel(matrix, model) {
 		uniforms.brightness,
 		brightness)
 
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
-	gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
+	if (model.indicies) {
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
+		gl.drawElements(
+			gl.TRIANGLES,
+			model.numberOfVertices,
+			gl.UNSIGNED_SHORT,
+			0)
+	} else {
+		gl.drawArrays(gl.TRIANGLES, 0, model.numberOfVertices)
+	}
 }
 
 // stolen from https://github.com/toji/gl-matrix
@@ -214,16 +223,16 @@ function scale(out, a, x, y, z) {
 
 // stolen from https://github.com/toji/gl-matrix
 function translate(out, a, x, y, z) {
-	var a00, a01, a02, a03,
-		a10, a11, a12, a13,
-		a20, a21, a22, a23
-
 	if (a === out) {
 		out[12] = a[0] * x + a[4] * y + a[8] * z + a[12]
 		out[13] = a[1] * x + a[5] * y + a[9] * z + a[13]
 		out[14] = a[2] * x + a[6] * y + a[10] * z + a[14]
 		out[15] = a[3] * x + a[7] * y + a[11] * z + a[15]
 	} else {
+		var a00, a01, a02, a03,
+			a10, a11, a12, a13,
+			a20, a21, a22, a23
+
 		a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3]
 		a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7]
 		a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11]
@@ -256,6 +265,10 @@ function draw() {
 	translate(m, mm, 0, M.sin(now * .001) * 7, -24)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, cube)
+
+	translate(m, mm, 10, 0, -25)
+	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
+	drawModel(m, tri)
 }
 
 function input() {
@@ -425,8 +438,36 @@ function cacheAttribLocations(program) {
 	gl.enableVertexAttribArray(normalLoc)
 }
 
+function createTriangle() {
+	var model = {
+		numberOfVertices: 3
+	}
+
+	model.vertices = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array([
+			0, -1, 0,
+			1, 1, 0,
+			-1, 1, 0]),
+		gl.STATIC_DRAW)
+
+	model.normals = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array([
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1]),
+		gl.STATIC_DRAW)
+
+	return model
+}
+
 function createCube() {
-	var model = {}
+	var model = {
+		numberOfVertices: 36
+	}
 
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
@@ -547,9 +588,11 @@ function init() {
 	gl.enable(gl.DEPTH_TEST)
 	gl.clearColor(.1, .1, .1, 1)
 
-	cube = createCube()
 	cacheAttribLocations(program)
 	cacheUniformLocations(program)
+
+	cube = createCube()
+	tri = createTriangle()
 
 	W.onresize = resize
 	resize()
