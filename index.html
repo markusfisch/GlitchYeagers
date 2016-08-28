@@ -32,16 +32,22 @@ uniform mat4 vm;
 uniform mat4 mm;
 uniform vec3 light;
 
-varying float intensity;
-varying vec4 tone;
+varying vec3 v_light;
+varying vec3 v_normal;
+varying vec4 v_color;
 
-//http://webglfundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
 void main() {
-	//intensity = dot(normalize(light - vertex), normal);
-	//intensity = dot(light, normalize(normal * mat3(pm)));
-	intensity = dot(normalize(normal), normalize(light * mat3(pm)));
-	tone = color;
-	gl_Position = pm * vm * mm * vec4(vertex, 1.0);
+	mat4 m = pm * vm * mm;
+	gl_Position = m * vec4(vertex, 1.0);
+	v_light = light;
+	// transpose() is not available in WebGL
+	mat4 transposed = mat4(
+		m[0][0], m[0][1], m[0][2], m[0][3],
+		m[1][0], m[1][1], m[1][2], m[1][3],
+		m[2][0], m[2][1], m[2][2], m[2][3],
+		m[3][0], m[3][1], m[3][2], m[3][3]);
+	v_normal = mat3(transposed) * normal;
+	v_color = color;
 }
 
 </script>
@@ -53,12 +59,15 @@ precision highp float;
 precision mediump float;
 #endif
 
-varying float intensity;
-varying vec4 tone;
+varying vec3 v_light;
+varying vec3 v_normal;
+varying vec4 v_color;
 
 void main() {
-	//gl_FragColor = tone * vec4(vec3(intensity), 1.0);
-	gl_FragColor = vec4(vec3(intensity), 1.0);
+	//gl_FragColor = v_color * vec4(
+	gl_FragColor = vec4(
+		vec3(.3 + max(.0, dot(normalize(v_normal), v_light))),
+		1.0);
 }
 
 </script>
@@ -276,17 +285,29 @@ function multiply(out, a, b) {
 	return out
 }
 
-var out = []
+var m = []
 function draw() {
 	gl.clear(
 		gl.COLOR_BUFFER_BIT |
 		gl.DEPTH_BUFFER_BIT)
 
 	gl.useProgram(program)
-	translate(out, mm, 0, Math.sin(now * .001), -10);
-	rotate(out, out, -1, 1, 0, 0);
-	rotate(out, out, (now * .001) % 6.283, 0, 0, 1);
-	drawModel(out, cubeVertices, cubeIndicies, cubeNormals);
+
+	//rotate(vm, vm, (now * .000000000000001) % 6.283, 0, 0, 1)
+
+	translate(m, mm, 0, M.sin(now * .001), -10)
+	rotate(m, m, -1, 1, 0, 0)
+	rotate(m, m, (now * .001) % 6.283, 0, 0, 1)
+	drawModel(m, cubeVertices, cubeIndicies, cubeNormals)
+
+	translate(m, mm, M.sin(now * .001) * 5, 0, -16)
+	rotate(m, m, -2, 1, 0, 0)
+	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
+	drawModel(m, cubeVertices, cubeIndicies, cubeNormals)
+
+	translate(m, mm, 0, M.sin(now * .001) * 7, -24)
+	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
+	drawModel(m, cubeVertices, cubeIndicies, cubeNormals)
 }
 
 function input() {
@@ -408,7 +429,7 @@ function resize() {
 	canvas.width = width = W.innerWidth
 	canvas.height = height = W.innerHeight
 
-	var fovy = 45,
+	var fovy = M.PI * .25,//45,
 		aspect = width / height,
 		near = 1,
 		far = 100,
@@ -432,7 +453,7 @@ function resize() {
 		0, 0, 1, 0,
 		0, 0, 0, 1])
 
-	light = new Float32Array([.5, .7, 1]);
+	light = new Float32Array([0, .25, -1]);
 
 	gl.viewport(0, 0, width, height)
 }
