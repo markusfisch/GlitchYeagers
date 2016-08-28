@@ -25,7 +25,6 @@ canvas {
 
 attribute vec3 vertex;
 attribute vec3 normal;
-//attribute vec4 color;
 
 uniform mat4 pm;
 uniform mat4 vm;
@@ -33,21 +32,17 @@ uniform mat4 mm;
 uniform vec3 light;
 
 varying float v_intensity;
-//varying vec4 v_color;
 
 void main() {
 	mat4 m = pm * vm * mm;
 	gl_Position = m * vec4(vertex, 1.0);
-	// transpose() is not available in WebGL
-	mat4 transposed = mat4(
-		m[0][0], m[0][1], m[0][2], m[0][3],
-		m[1][0], m[1][1], m[1][2], m[1][3],
-		m[2][0], m[2][1], m[2][2], m[2][3],
-		m[3][0], m[3][1], m[3][2], m[3][3]);
 	v_intensity = max(.0, dot(
-		normalize(mat3(transposed) * normal),
+		normalize(mat3(
+			// transpose
+			m[0][0], m[0][1], m[0][2],
+			m[1][0], m[1][1], m[1][2],
+			m[2][0], m[2][1], m[2][2]) * normal),
 		light));
-	//v_color = color;
 }
 
 </script>
@@ -59,13 +54,13 @@ precision highp float;
 precision mediump float;
 #endif
 
+uniform float brightness;
+
 varying float v_intensity;
-//varying vec4 v_color;
 
 void main() {
-	//gl_FragColor = v_color * vec4(
 	gl_FragColor = vec4(
-		vec3(.3 + v_intensity),
+		vec3(.3 + v_intensity) * brightness,
 		1.0);
 }
 
@@ -79,19 +74,16 @@ var M = Math,
 	W = window,
 	canvas,
 	gl,
-	light,
-	cubeVertices,
-	cubeIndicies,
-	cubeNormals,
-//cubeColors,
 	vertexLoc,
 	normalLoc,
-//colorLoc,
 	pm,
 	vm,
 	mm,
 	m = [],
+	light = new Float32Array([.25, .25, -1]),
+	brightness = 1,
 	program,
+	cube = {},
 	width,
 	height,
 	now,
@@ -102,8 +94,8 @@ var M = Math,
 	pointersY = [],
 	keysDown = []
 
-function drawModel(matrix, vbo, ibo, nbo) {
-	gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
+function drawModel(matrix, model) {
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.vertexAttribPointer(
 		vertexLoc,
 		3,
@@ -111,7 +103,7 @@ function drawModel(matrix, vbo, ibo, nbo) {
 		gl.FALSE,
 		0,
 		0)
-	gl.bindBuffer(gl.ARRAY_BUFFER, nbo)
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.vertexAttribPointer(
 		normalLoc,
 		3,
@@ -119,14 +111,6 @@ function drawModel(matrix, vbo, ibo, nbo) {
 		gl.FALSE,
 		0,
 		0)
-/*gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors)
-gl.vertexAttribPointer(
-	colorLoc,
-	4,
-	gl.FLOAT,
-	gl.FALSE,
-	0,
-	0)*/
 
 	var uniforms = program.uniforms
 	gl.uniformMatrix4fv(
@@ -144,11 +128,15 @@ gl.vertexAttribPointer(
 	gl.uniform3fv(
 		uniforms.light,
 		light)
+	gl.uniform1f(
+		uniforms.brightness,
+		brightness)
 
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
 	gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
 }
 
+// stolen from https://github.com/toji/gl-matrix
 function rotate(out, a, rad, x, y, z) {
 	var len = M.sqrt(x * x + y * y + z * z),
 		s, c, t,
@@ -158,6 +146,10 @@ function rotate(out, a, rad, x, y, z) {
 		b00, b01, b02,
 		b10, b11, b12,
 		b20, b21, b22
+
+	if (Math.abs(len) < 0.000001) {
+		return
+	}
 
 	len = 1 / len
 	x *= len
@@ -198,10 +190,9 @@ function rotate(out, a, rad, x, y, z) {
 		out[14] = a[14]
 		out[15] = a[15]
 	}
-
-	return out
 }
 
+// stolen from https://github.com/toji/gl-matrix
 function scale(out, a, x, y, z) {
 	out[0] = a[0] * x
 	out[1] = a[1] * x
@@ -219,10 +210,9 @@ function scale(out, a, x, y, z) {
 	out[13] = a[13]
 	out[14] = a[14]
 	out[15] = a[15]
-
-	return out
 }
 
+// stolen from https://github.com/toji/gl-matrix
 function translate(out, a, x, y, z) {
 	var a00, a01, a02, a03,
 		a10, a11, a12, a13,
@@ -247,66 +237,25 @@ function translate(out, a, x, y, z) {
 		out[14] = a02 * x + a12 * y + a22 * z + a[14]
 		out[15] = a03 * x + a13 * y + a23 * z + a[15]
 	}
-
-	return out
-}
-
-function multiply(out, a, b) {
-	var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-		a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-		a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-		a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15]
-
-	// cache only the current line of the second matrix
-	var b0  = b[0], b1 = b[1], b2 = b[2], b3 = b[3]
-	out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30
-	out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31
-	out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32
-	out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33
-
-	b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7]
-	out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30
-	out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31
-	out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32
-	out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33
-
-	b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11]
-	out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30
-	out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31
-	out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32
-	out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33
-
-	b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15]
-	out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30
-	out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31
-	out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32
-	out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33
-
-	return out
 }
 
 function draw() {
-	gl.clear(
-		gl.COLOR_BUFFER_BIT |
-		gl.DEPTH_BUFFER_BIT)
-
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
-
-	//rotate(vm, vm, (now * .000000000000001) % 6.283, 0, 0, 1)
 
 	translate(m, mm, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
 	rotate(m, m, (now * .001) % 6.283, 0, 0, 1)
-	drawModel(m, cubeVertices, cubeIndicies, cubeNormals)
+	drawModel(m, cube)
 
 	translate(m, mm, M.sin(now * .001) * 5, 0, -16)
 	rotate(m, m, -2, 1, 0, 0)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, cubeVertices, cubeIndicies, cubeNormals)
+	drawModel(m, cube)
 
 	translate(m, mm, 0, M.sin(now * .001) * 7, -24)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, cubeVertices, cubeIndicies, cubeNormals)
+	drawModel(m, cube)
 }
 
 function input() {
@@ -347,11 +296,11 @@ function setPointer(event, down) {
 
 	// map to WebGL coordinates
 	var xf = 2 / width,
-		yf = 2 / (height / width)
+		yf = 2 / height
 
 	for (var i = pointersLength; i--;) {
 		pointersX[i] = pointersX[i]*xf - 1
-		pointersY[i] = pointersY[i]*yf - 1
+		pointersY[i] = -(pointersY[i]*yf - 1)
 	}
 
 	event.preventDefault()
@@ -428,31 +377,23 @@ function resize() {
 	canvas.width = width = W.innerWidth
 	canvas.height = height = W.innerHeight
 
-	var fovy = M.PI * .25,//45,
-		aspect = width / height,
+	var aspect = width / height,
 		near = 1,
 		far = 100,
-		f = 1 / M.tan(fovy / 2)
+		r = near - far,
+		f = 1 / M.tan(M.PI * .125)
 
 	pm = new Float32Array([
 		f/aspect, 0, 0, 0,
 		0, f, 0, 0,
-		0, 0, (far + near) / (near - far), -1,
-		0, 0, (2 * far * near) / (near - far), 0])
+		0, 0, (far + near) / r, -1,
+		0, 0, (2 * far * near) / r, 0])
 
-	vm = new Float32Array([
+	vm = mm = new Float32Array([
 		1, 0, 0, 0,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
 		0, 0, 0, 1])
-
-	mm = new Float32Array([
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1])
-
-	light = new Float32Array([0, .25, -1])
 
 	gl.viewport(0, 0, width, height)
 }
@@ -470,6 +411,7 @@ function cacheUniformLocations(program) {
 	cacheUniformLocation(program, "vm")
 	cacheUniformLocation(program, "mm")
 	cacheUniformLocation(program, "light")
+	cacheUniformLocation(program, "brightness")
 }
 
 function cacheAttribLocations(program) {
@@ -481,15 +423,13 @@ function cacheAttribLocations(program) {
 		program,
 		"normal")
 	gl.enableVertexAttribArray(normalLoc)
-	/*colorLoc = gl.getAttribLocation(
-		program,
-		"color")
-	gl.enableVertexAttribArray(colorLoc)*/
 }
 
-function initVertexBuffers() {
-	cubeVertices = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertices)
+function createCube() {
+	var model = {}
+
+	model.vertices = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.bufferData(gl.ARRAY_BUFFER,
 		new Float32Array([
 			// front
@@ -524,8 +464,8 @@ function initVertexBuffers() {
 			1, 1, -1]),
 		gl.STATIC_DRAW)
 
-	cubeIndicies = gl.createBuffer()
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIndicies)
+	model.indicies = gl.createBuffer()
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
 		new Uint16Array([
 			// front
@@ -548,8 +488,8 @@ function initVertexBuffers() {
 			20, 23, 22]),
 		gl.STATIC_DRAW)
 
-	cubeNormals = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, cubeNormals)
+	model.normals = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.bufferData(gl.ARRAY_BUFFER,
 		new Float32Array([
 			// front
@@ -584,28 +524,7 @@ function initVertexBuffers() {
 			0, 1, 0]),
 		gl.STATIC_DRAW)
 
-/*var colors = [
-[1.0,  1.0,  1.0,  1.0],    // vordere Fläche: weiß
-[1.0,  0.0,  0.0,  1.0],    // hintere Fläche: rot
-[0.0,  1.0,  0.0,  1.0],    // obere Fläche: grün
-[0.0,  0.0,  1.0,  1.0],    // untere Fläche: blau
-[1.0,  1.0,  0.0,  1.0],    // rechte Fläche: gelb
-[1.0,  0.0,  1.0,  1.0]     // linke Fläche: violett
-]
-
-var generatedColors = []
-for (var j=0; j<6; j++) {
-	var c = colors[j]
-
-	for (var i=0; i<4; i++) {
-		generatedColors = generatedColors.concat(c)
-	}
-}
-cubeColors = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors)
-gl.bufferData(gl.ARRAY_BUFFER,
-	new Float32Array(generatedColors),
-	gl.STATIC_DRAW)*/
+	return model
 }
 
 function init() {
@@ -619,19 +538,16 @@ function init() {
 	}
 
 	if (!(program = buildProgram(
-		D.getElementById("VertexShader").textContent,
-		D.getElementById("FragmentShader").textContent))) {
+			D.getElementById("VertexShader").textContent,
+			D.getElementById("FragmentShader").textContent))) {
 		alert("GLSL program did not link")
 		return
 	}
 
 	gl.enable(gl.DEPTH_TEST)
-	//gl.depthFunc(gl.LEQUAL)
-	//gl.enable(gl.BLEND)
-	//gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
-	gl.clearColor(0, 0, 0, 1)
+	gl.clearColor(.1, .1, .1, 1)
 
-	initVertexBuffers()
+	cube = createCube()
 	cacheAttribLocations(program)
 	cacheUniformLocations(program)
 
