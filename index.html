@@ -25,15 +25,22 @@ canvas {
 
 attribute vec3 vertex;
 attribute vec3 normal;
+attribute vec4 color;
 
 uniform mat4 pm;
 uniform mat4 vm;
 uniform mat4 mm;
 uniform vec3 light;
-varying float intensity;
 
+varying float intensity;
+varying vec4 tone;
+
+//http://webglfundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
 void main() {
-	intensity = dot(normalize(light - vertex), normal);
+	//intensity = dot(normalize(light - vertex), normal);
+	//intensity = dot(light, normalize(normal * mat3(pm)));
+	intensity = dot(normalize(normal), normalize(light * mat3(pm)));
+	tone = color;
 	gl_Position = pm * vm * mm * vec4(vertex, 1.0);
 }
 
@@ -47,9 +54,11 @@ precision mediump float;
 #endif
 
 varying float intensity;
+varying vec4 tone;
 
 void main() {
-	gl_FragColor = vec4(vec3(.2, .4, .8) * intensity, 1.0);
+	//gl_FragColor = tone * vec4(vec3(intensity), 1.0);
+	gl_FragColor = vec4(vec3(intensity), 1.0);
 }
 
 </script>
@@ -66,8 +75,10 @@ var M = Math,
 	cubeVertices,
 	cubeIndicies,
 	cubeNormals,
+cubeColors,
 	vertexLoc,
 	normalLoc,
+colorLoc,
 	pm,
 	vm,
 	mm,
@@ -99,6 +110,14 @@ function drawModel(matrix, vbo, ibo, nbo) {
 		gl.FALSE,
 		0,
 		0)
+gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors);
+gl.vertexAttribPointer(
+	colorLoc,
+	4,
+	gl.FLOAT,
+	gl.FALSE,
+	0,
+	0)
 
 	var uniforms = program.uniforms;
 	gl.uniformMatrix4fv(
@@ -118,8 +137,7 @@ function drawModel(matrix, vbo, ibo, nbo) {
 		light)
 
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
-	//gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
-	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+	gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
 }
 
 function rotate(out, a, rad, x, y, z) {
@@ -131,8 +149,6 @@ function rotate(out, a, rad, x, y, z) {
 		b00, b01, b02,
 		b10, b11, b12,
 		b20, b21, b22
-
-	//if (M.abs(len) < glMatrix.EPSILON) { return null }
 
 	len = 1 / len
 	x *= len
@@ -260,31 +276,15 @@ function multiply(out, a, b) {
 	return out
 }
 
-/*function translate(m, x, y, z) {
-	mm[12] = x
-	mm[13] = y
-	mm[14] = z
-}
-
-function scale(m, x, y, z) {
-}
-
-function rotate(m, x, y, z) {
-}*/
-
 var out = []
 function draw() {
 	gl.clear(
 		gl.COLOR_BUFFER_BIT |
 		gl.DEPTH_BUFFER_BIT)
 
-	var now = Date.now();
-
 	gl.useProgram(program)
-	//mm[14] = -((Date.now() % 2000) / 100)
-	//rotate(mm, 0, 0, .31415);
-	//translate(mm, 0, 0, -10);
-	translate(out, mm, 0, 0, -10);
+	translate(out, mm, 0, Math.sin(now * .001), -10);
+	rotate(out, out, -1, 1, 0, 0);
 	rotate(out, out, (now * .001) % 6.283, 0, 0, 1);
 	drawModel(out, cubeVertices, cubeIndicies, cubeNormals);
 }
@@ -410,7 +410,7 @@ function resize() {
 
 	var fovy = 45,
 		aspect = width / height,
-		near = 0,
+		near = 1,
 		far = 100,
 		f = 1 / M.tan(fovy / 2)
 
@@ -432,7 +432,7 @@ function resize() {
 		0, 0, 1, 0,
 		0, 0, 0, 1])
 
-	light = new Float32Array([2, 2, 2]);
+	light = new Float32Array([.5, .7, 1]);
 
 	gl.viewport(0, 0, width, height)
 }
@@ -461,6 +461,10 @@ function cacheAttribLocations(program) {
 		program,
 		"normal")
 	gl.enableVertexAttribArray(normalLoc)
+	colorLoc = gl.getAttribLocation(
+		program,
+		"color")
+	gl.enableVertexAttribArray(colorLoc)
 }
 
 function initVertexBuffers() {
@@ -473,7 +477,7 @@ function initVertexBuffers() {
 			1, -1, 1,
 			-1, 1, 1,
 			1, 1, 1,
-			/*/ right
+			// right
 			1, -1, 1,
 			1, -1, -1,
 			1, 1, 1,
@@ -497,7 +501,7 @@ function initVertexBuffers() {
 			-1, 1, 1,
 			1, 1, 1,
 			-1, 1, -1,
-			1, 1, -1*/]),
+			1, 1, -1]),
 		gl.STATIC_DRAW)
 
 	cubeIndicies = gl.createBuffer()
@@ -507,7 +511,7 @@ function initVertexBuffers() {
 			// front
 			0, 1, 3,
 			0, 3, 2,
-			/*/ right
+			// right
 			4, 5, 7,
 			4, 7, 6,
 			// back
@@ -521,7 +525,7 @@ function initVertexBuffers() {
 			16, 19, 18,
 			// top
 			20, 21, 23,
-			20, 23, 22*/]),
+			20, 23, 22]),
 		gl.STATIC_DRAW)
 
 	cubeNormals = gl.createBuffer()
@@ -533,7 +537,7 @@ function initVertexBuffers() {
 			0, 0, 1,
 			0, 0, 1,
 			0, 0, 1,
-			/*/ right
+			// right
 			1, 0, 0,
 			1, 0, 0,
 			1, 0, 0,
@@ -557,8 +561,31 @@ function initVertexBuffers() {
 			0, 1, 0,
 			0, 1, 0,
 			0, 1, 0,
-			0, 1, 0*/]),
+			0, 1, 0]),
 		gl.STATIC_DRAW)
+
+var colors = [
+[1.0,  1.0,  1.0,  1.0],    // vordere Fläche: weiß
+[1.0,  0.0,  0.0,  1.0],    // hintere Fläche: rot
+[0.0,  1.0,  0.0,  1.0],    // obere Fläche: grün
+[0.0,  0.0,  1.0,  1.0],    // untere Fläche: blau
+[1.0,  1.0,  0.0,  1.0],    // rechte Fläche: gelb
+[1.0,  0.0,  1.0,  1.0]     // linke Fläche: violett
+]
+
+var generatedColors = []
+for (var j=0; j<6; j++) {
+	var c = colors[j]
+
+	for (var i=0; i<4; i++) {
+		generatedColors = generatedColors.concat(c)
+	}
+}
+cubeColors = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, cubeColors)
+gl.bufferData(gl.ARRAY_BUFFER,
+	new Float32Array(generatedColors),
+	gl.STATIC_DRAW)
 }
 
 function init() {
@@ -578,10 +605,10 @@ function init() {
 		return
 	}
 
-	gl.enable(gl.DEPTH_TEST);
-	gl.depthFunc(gl.LEQUAL);
-	gl.enable(gl.BLEND)
-	gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+	gl.enable(gl.DEPTH_TEST)
+	//gl.depthFunc(gl.LEQUAL)
+	//gl.enable(gl.BLEND)
+	//gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 	gl.clearColor(0, 0, 0, 1)
 
 	initVertexBuffers()
