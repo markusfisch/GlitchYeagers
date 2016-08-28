@@ -83,8 +83,8 @@ var M = Math,
 	light = new Float32Array([.25, .25, -1]),
 	brightness = 1,
 	program,
-	cube,
 	tri,
+	cube,
 	width,
 	height,
 	now,
@@ -438,10 +438,124 @@ function cacheAttribLocations(program) {
 	gl.enableVertexAttribArray(normalLoc)
 }
 
-function createTriangle() {
-	var model = {
-		numberOfVertices: 3
+function calculateNormals(vertices, indicies) {
+	var normals = []
+
+	for (var i = 0, l = indicies.length; i < l;) {
+		var a = indicies[i++] * 3,
+			b = indicies[i++] * 3,
+			c = indicies[i++] * 3,
+			x1 = vertices[a],
+			y1 = vertices[a + 1],
+			z1 = vertices[a + 2],
+			x2 = vertices[b],
+			y2 = vertices[b + 1],
+			z2 = vertices[b + 2],
+			x3 = vertices[c],
+			y3 = vertices[c + 1],
+			z3 = vertices[c + 2],
+			ux = x2 - x1,
+			uy = y2 - y1,
+			uz = z2 - z1,
+			vx = x3 - x1,
+			vy = y3 - y1,
+			vz = z3 - z1,
+			nx = uy * vz - uz * vy,
+			ny = uz * vx - ux * vz,
+			nz = ux * vy - uy * vx
+
+		normals[a] = nx
+		normals[a + 1] = ny
+		normals[a + 2] = nz
+
+		normals[b] = nx
+		normals[b + 1] = ny
+		normals[b + 2] = nz
+
+		normals[c] = nx
+		normals[c + 1] = ny
+		normals[c + 2] = nz
 	}
+
+	return normals
+}
+
+function createCube() {
+	var vertices = [
+			// front
+			-1, -1, 1,
+			1, -1, 1,
+			-1, 1, 1,
+			1, 1, 1,
+			// right
+			1, -1, 1,
+			1, -1, -1,
+			1, 1, 1,
+			1, 1, -1,
+			// back
+			1, -1, -1,
+			-1, -1, -1,
+			1, 1, -1,
+			-1, 1, -1,
+			// left
+			-1, -1, -1,
+			-1, -1, 1,
+			-1, 1, -1,
+			-1, 1, 1,
+			// bottom
+			-1, -1, -1,
+			1, -1, -1,
+			-1, -1, 1,
+			1, -1, 1,
+			// top
+			-1, 1, 1,
+			1, 1, 1,
+			-1, 1, -1,
+			1, 1, -1],
+		indicies = [
+			// front
+			0, 1, 3,
+			0, 3, 2,
+			// right
+			4, 5, 7,
+			4, 7, 6,
+			// back
+			8, 9, 11,
+			8, 11, 10,
+			// left
+			12, 13, 15,
+			12, 15, 14,
+			// bottom
+			16, 17, 19,
+			16, 19, 18,
+			// top
+			20, 21, 23,
+			20, 23, 22],
+		model = {numberOfVertices: indicies.length}
+
+	model.vertices = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array(vertices),
+		gl.STATIC_DRAW)
+
+	model.indicies = gl.createBuffer()
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+		new Uint16Array(indicies),
+		gl.STATIC_DRAW)
+
+	model.normals = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array(calculateNormals(vertices, indicies)),
+		gl.STATIC_DRAW)
+
+	return model
+}
+
+function createTriangle() {
+	var model = {numberOfVertices: 3}
 
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
@@ -464,110 +578,6 @@ function createTriangle() {
 	return model
 }
 
-function createCube() {
-	var model = {
-		numberOfVertices: 36
-	}
-
-	model.vertices = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array([
-			// front
-			-1, -1, 1,
-			1, -1, 1,
-			-1, 1, 1,
-			1, 1, 1,
-			// right
-			1, -1, 1,
-			1, -1, -1,
-			1, 1, 1,
-			1, 1, -1,
-			// back
-			1, -1, -1,
-			-1, -1, -1,
-			1, 1, -1,
-			-1, 1, -1,
-			// left
-			-1, -1, -1,
-			-1, -1, 1,
-			-1, 1, -1,
-			-1, 1, 1,
-			// bottom
-			-1, -1, -1,
-			1, -1, -1,
-			-1, -1, 1,
-			1, -1, 1,
-			// top
-			-1, 1, 1,
-			1, 1, 1,
-			-1, 1, -1,
-			1, 1, -1]),
-		gl.STATIC_DRAW)
-
-	model.indicies = gl.createBuffer()
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
-		new Uint16Array([
-			// front
-			0, 1, 3,
-			0, 3, 2,
-			// right
-			4, 5, 7,
-			4, 7, 6,
-			// back
-			8, 9, 11,
-			8, 11, 10,
-			// left
-			12, 13, 15,
-			12, 15, 14,
-			// bottom
-			16, 17, 19,
-			16, 19, 18,
-			// top
-			20, 21, 23,
-			20, 23, 22]),
-		gl.STATIC_DRAW)
-
-	model.normals = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array([
-			// front
-			0, 0, 1,
-			0, 0, 1,
-			0, 0, 1,
-			0, 0, 1,
-			// right
-			1, 0, 0,
-			1, 0, 0,
-			1, 0, 0,
-			1, 0, 0,
-			// back
-			0, 0, -1,
-			0, 0, -1,
-			0, 0, -1,
-			0, 0, -1,
-			// left
-			-1, 0, 0,
-			-1, 0, 0,
-			-1, 0, 0,
-			-1, 0, 0,
-			// bottom
-			0, -1, 0,
-			0, -1, 0,
-			0, -1, 0,
-			0, -1, 0,
-			// top
-			0, 1, 0,
-			0, 1, 0,
-			0, 1, 0,
-			0, 1, 0]),
-		gl.STATIC_DRAW)
-
-	return model
-}
-
 function init() {
 	if (!(canvas = D.getElementById("Canvas"))) {
 		return
@@ -577,6 +587,9 @@ function init() {
 		alert("WebGL not available")
 		return
 	}
+
+	tri = createTriangle()
+	cube = createCube()
 
 	if (!(program = buildProgram(
 			D.getElementById("VertexShader").textContent,
@@ -590,9 +603,6 @@ function init() {
 
 	cacheAttribLocations(program)
 	cacheUniformLocations(program)
-
-	cube = createCube()
-	tri = createTriangle()
 
 	W.onresize = resize
 	resize()
