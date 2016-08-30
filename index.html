@@ -27,7 +27,7 @@ attribute vec3 vertex;
 attribute vec3 normal;
 
 uniform mat4 mvp;
-uniform mat4 tmvp;
+uniform mat4 mv;
 uniform vec3 light;
 
 varying float intensity;
@@ -35,16 +35,11 @@ varying float intensity;
 void main() {
 	gl_Position = mvp * vec4(vertex, 1.0);
 	intensity = max(.0, dot(
-		normalize(mat3(tmvp) * normal),
-		/*normalize(mat3(
-			tmvp[0][0], tmvp[1][0], tmvp[2][0],
-			tmvp[0][1], tmvp[1][1], tmvp[2][1],
-			tmvp[0][2], tmvp[1][2], tmvp[2][2]) * normal),*/
-		/*normalize(mat3(
+		normalize(mat3(
 			// transpose matrix
-			mvp[0][0], mvp[0][1], mvp[0][2],
-			mvp[1][0], mvp[1][1], mvp[1][2],
-			mvp[2][0], mvp[2][1], mvp[2][2]) * normal),*/
+			mv[0][0], mv[0][1], mv[0][2],
+			mv[1][0], mv[1][1], mv[1][2],
+			mv[2][0], mv[2][1], mv[2][2]) * normal),
 		light));
 }
 
@@ -64,7 +59,7 @@ varying float intensity;
 
 void main() {
 	gl_FragColor = color * vec4(
-		vec3(.3 + intensity) * brightness,
+		vec3(max(.3, intensity)) * brightness,
 		1.0);
 }
 
@@ -83,9 +78,9 @@ var M = Math,
 	pm,
 	vm,
 	mm,
-	tmvp = [],
-	m = [],
-	light = new Float32Array([.25, .25, -1]),
+	mv,
+	m,
+	light = new Float32Array([.5, .5, 1]),
 	brightness = 1,
 	program,
 	tri,
@@ -103,76 +98,6 @@ var M = Math,
 	colorRed = [1, 0, 0, 1],
 	colorGreen = [0, 1, 0, 1],
 	colorBlue = [0, 0, 1, 1]
-
-function transpose(out, a) {
-	out[0] = a[0]
-	out[1] = a[4]
-	out[2] = a[8]
-	out[3] = a[12]
-	out[4] = a[1]
-	out[5] = a[5]
-	out[6] = a[9]
-	out[7] = a[13]
-	out[8] = a[2]
-	out[9] = a[6]
-	out[10] = a[10]
-	out[11] = a[14]
-	out[12] = a[3]
-	out[13] = a[7]
-	out[14] = a[11]
-	out[15] = a[15]
-}
-
-function drawModel(mvp, model, color) {
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
-	gl.vertexAttribPointer(
-		vertexLoc,
-		3,
-		gl.FLOAT,
-		gl.FALSE,
-		0,
-		0)
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
-	gl.vertexAttribPointer(
-		normalLoc,
-		3,
-		gl.FLOAT,
-		gl.FALSE,
-		0,
-		0)
-
-	transpose(tmvp, mvp)
-
-	var uniforms = program.uniforms
-	gl.uniformMatrix4fv(
-		uniforms.mvp,
-		gl.FALSE,
-		mvp)
-	gl.uniformMatrix4fv(
-		uniforms.tmvp,
-		gl.FALSE,
-		tmvp)
-	gl.uniform3fv(
-		uniforms.light,
-		light)
-	gl.uniform4fv(
-		uniforms.color,
-		color)
-	gl.uniform1f(
-		uniforms.brightness,
-		brightness)
-
-	if (model.indicies) {
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
-		gl.drawElements(
-			gl.TRIANGLES,
-			model.numberOfVertices,
-			gl.UNSIGNED_SHORT,
-			0)
-	} else {
-		gl.drawArrays(gl.TRIANGLES, 0, model.numberOfVertices)
-	}
-}
 
 // stolen from https://github.com/toji/gl-matrix
 function multiply(out, a, b) {
@@ -310,6 +235,59 @@ function translate(out, a, x, y, z) {
 	}
 }
 
+function drawModel(matrix, model, color) {
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
+	gl.vertexAttribPointer(
+		vertexLoc,
+		3,
+		gl.FLOAT,
+		gl.FALSE,
+		0,
+		0)
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
+	gl.vertexAttribPointer(
+		normalLoc,
+		3,
+		gl.FLOAT,
+		gl.FALSE,
+		0,
+		0)
+
+	multiply(mv, vm, matrix)
+	multiply(matrix, pm, matrix)
+	multiply(matrix, vm, matrix)
+
+	var uniforms = program.uniforms
+	gl.uniformMatrix4fv(
+		uniforms.mvp,
+		gl.FALSE,
+		matrix)
+	gl.uniformMatrix4fv(
+		uniforms.mv,
+		gl.FALSE,
+		mv)
+	gl.uniform3fv(
+		uniforms.light,
+		light)
+	gl.uniform4fv(
+		uniforms.color,
+		color)
+	gl.uniform1f(
+		uniforms.brightness,
+		brightness)
+
+	if (model.indicies) {
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
+		gl.drawElements(
+			gl.TRIANGLES,
+			model.numberOfVertices,
+			gl.UNSIGNED_SHORT,
+			0)
+	} else {
+		gl.drawArrays(gl.TRIANGLES, 0, model.numberOfVertices)
+	}
+}
+
 function draw() {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
@@ -317,27 +295,19 @@ function draw() {
 	translate(m, mm, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
 	rotate(m, m, (now * .001) % 6.283, 0, 0, 1)
-	multiply(m, pm, m)
-	multiply(m, vm, m)
 	drawModel(m, cube, colorWhite)
 
 	translate(m, mm, M.sin(now * .001) * 5, 0, -16)
 	rotate(m, m, -2, 1, 0, 0)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	multiply(m, pm, m)
-	multiply(m, vm, m)
 	drawModel(m, cube, colorRed)
 
 	translate(m, mm, 0, M.sin(now * .001) * 7, -24)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	multiply(m, pm, m)
-	multiply(m, vm, m)
 	drawModel(m, cube, colorGreen)
 
 	translate(m, mm, 10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	multiply(m, pm, m)
-	multiply(m, vm, m)
 	drawModel(m, tri, colorBlue)
 }
 
@@ -476,11 +446,16 @@ function resize() {
 		0, 0, (far + near) / r, -1,
 		0, 0, (2 * far * near) / r, 0])
 
-	vm = mm = new Float32Array([
+	var identity = [
 		1, 0, 0, 0,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
-		0, 0, 0, 1])
+		0, 0, 0, 1]
+
+	vm = new Float32Array(identity)
+	mm = new Float32Array(identity)
+	mv = new Float32Array(identity);
+	m = new Float32Array(identity);
 }
 
 function cacheUniformLocation(program, name) {
@@ -492,11 +467,17 @@ function cacheUniformLocation(program, name) {
 }
 
 function cacheUniformLocations(program) {
-	cacheUniformLocation(program, "mvp")
-	cacheUniformLocation(program, "tmvp")
-	cacheUniformLocation(program, "light")
-	cacheUniformLocation(program, "color")
-	cacheUniformLocation(program, "brightness")
+	var uniforms = [
+		"mvp",
+		"mv",
+		"light",
+		"color",
+		"brightness"
+	];
+
+	for (var i = 0, l = uniforms.length; i < l; ++i) {
+		cacheUniformLocation(program, uniforms[i])
+	}
 }
 
 function cacheAttribLocations(program) {
