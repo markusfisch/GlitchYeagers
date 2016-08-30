@@ -309,6 +309,15 @@ function draw() {
 	translate(m, mm, 10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, tri, colorBlue)
+
+	var t = now * .002
+	for (var y = -20; y < 20; y += 2) {
+		for (var x = -20; x < 20; x += 2) {
+			translate(m, mm, x, y, -30)
+			rotate(m, m, ((t + x + y) * .5) % 6.283, 1, 0, 0)
+			drawModel(m, cube, (x + y) % 4 == 0 ? colorWhite : colorBlue)
+		}
+	}
 }
 
 function input() {
