@@ -236,6 +236,35 @@ function translate(out, a, x, y, z) {
 }
 
 function drawModel(matrix, model, color) {
+	multiply(wm, pm, matrix)
+	multiply(matrix, vm, matrix)
+	multiply(matrix, pm, matrix)
+
+	var uniforms = program.uniforms
+	gl.uniformMatrix4fv(
+		uniforms.mvp,
+		gl.FALSE,
+		matrix)
+	gl.uniformMatrix4fv(
+		uniforms.wm,
+		gl.FALSE,
+		wm)
+	gl.uniform4fv(
+		uniforms.color,
+		color)
+
+	if (model.indicies) {
+		gl.drawElements(
+			gl.TRIANGLES,
+			model.numberOfVertices,
+			gl.UNSIGNED_SHORT,
+			0)
+	} else {
+		gl.drawArrays(gl.TRIANGLES, 0, model.numberOfVertices)
+	}
+}
+
+function loadModel(model) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.vertexAttribPointer(
 		vertexLoc,
@@ -253,38 +282,8 @@ function drawModel(matrix, model, color) {
 		0,
 		0)
 
-	multiply(wm, pm, matrix)
-	multiply(matrix, vm, matrix)
-	multiply(matrix, pm, matrix)
-
-	var uniforms = program.uniforms
-	gl.uniformMatrix4fv(
-		uniforms.mvp,
-		gl.FALSE,
-		matrix)
-	gl.uniformMatrix4fv(
-		uniforms.wm,
-		gl.FALSE,
-		wm)
-	gl.uniform3fv(
-		uniforms.light,
-		light)
-	gl.uniform4fv(
-		uniforms.color,
-		color)
-	gl.uniform1f(
-		uniforms.brightness,
-		brightness)
-
 	if (model.indicies) {
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
-		gl.drawElements(
-			gl.TRIANGLES,
-			model.numberOfVertices,
-			gl.UNSIGNED_SHORT,
-			0)
-	} else {
-		gl.drawArrays(gl.TRIANGLES, 0, model.numberOfVertices)
 	}
 }
 
@@ -292,7 +291,23 @@ function draw() {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
 
+	var uniforms = program.uniforms
+	gl.uniform3fv(
+		uniforms.light,
+		light)
+	gl.uniform1f(
+		uniforms.brightness,
+		brightness)
+
 	rotate(vm, vm, M.sin(now * .001) * .005, 1, 1, 1)
+
+	loadModel(tri)
+
+	translate(m, mm, 10, 0, -25)
+	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
+	drawModel(m, tri, colorBlue)
+
+	loadModel(cube)
 
 	translate(m, mm, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
@@ -307,10 +322,6 @@ function draw() {
 	translate(m, mm, 0, M.sin(now * .001) * 7, -24)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, cube, colorGreen)
-
-	translate(m, mm, 10, 0, -25)
-	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, tri, colorBlue)
 
 	var t = now * .002
 	for (var y = -20; y < 20; y += 2) {
@@ -426,7 +437,7 @@ function linkProgram(vs, fs) {
 function buildProgram(vertexSource, fragmentSource) {
 	var p, vs, fs
 	if ((vs = compileShader(vertexSource, gl.VERTEX_SHADER))) {
-		if ((fs = compileShader(fragmentSource, gl.FRAGMENT_SHADER ))) {
+		if ((fs = compileShader(fragmentSource, gl.FRAGMENT_SHADER))) {
 			p = linkProgram(vs, fs)
 			gl.deleteShader(fs)
 		}
