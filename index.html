@@ -264,7 +264,7 @@ function drawModel(matrix, model, color) {
 	}
 }
 
-function loadModel(model) {
+function bindModel(model) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.vertexAttribPointer(
 		vertexLoc,
@@ -301,13 +301,13 @@ function draw() {
 
 	rotate(vm, vm, M.sin(now * .001) * .005, 1, 1, 1)
 
-	loadModel(tri)
+	bindModel(tri)
 
 	translate(m, mm, 10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, tri, colorBlue)
 
-	loadModel(cube)
+	bindModel(cube)
 
 	translate(m, mm, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
