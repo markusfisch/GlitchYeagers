@@ -56,15 +56,16 @@ precision mediump float;
 
 uniform float brightness;
 uniform vec4 color;
+uniform vec4 horizon;
 
 varying float intensity;
 varying float z;
 
 void main() {
-	float f = 1.0 - abs(z / -100.0);
-	gl_FragColor = (f * color) * vec4(
-		vec3(max(.3, intensity)) * brightness,
-		1.0);
+	float f = z / 100.0;
+	gl_FragColor =
+		(1.0 - f) * color * max(.3, intensity) * brightness +
+		f * horizon;
 }
 
 </script>
@@ -84,7 +85,8 @@ var M = Math,
 	vm,
 	wm,
 	m,
-	light = new Float32Array([.5, .5, -1]),
+	light = [.5, .5, -1],
+	horizonColor = [.2, .5, .8, 1],
 	brightness = 1,
 	program,
 	plane,
@@ -300,6 +302,9 @@ function draw() {
 	gl.uniform3fv(
 		uniforms.light,
 		light)
+	gl.uniform4fv(
+		uniforms.horizon,
+		horizonColor)
 	gl.uniform1f(
 		uniforms.brightness,
 		brightness)
@@ -309,6 +314,10 @@ function draw() {
 	translate(m, im, -10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, plane, colorRed)
+
+	translate(m, im, 0, 0, -50)
+	scale(m, m, 1000, 1000, 1000)
+	drawModel(m, plane, colorGreen)
 
 	bindModel(tri)
 
@@ -539,6 +548,7 @@ function cacheUniformLocations(program) {
 		"wm",
 		"light",
 		"color",
+		"horizon",
 		"brightness"
 	]
 
@@ -753,7 +763,11 @@ function init() {
 	}
 
 	gl.enable(gl.DEPTH_TEST)
-	gl.clearColor(0, 0, 0, 1)
+	gl.clearColor(
+		horizonColor[0],
+		horizonColor[1],
+		horizonColor[2],
+		horizonColor[3])
 
 	cacheAttribLocations(program)
 	cacheUniformLocations(program)
