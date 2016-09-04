@@ -75,9 +75,9 @@ var M = Math,
 	gl,
 	vertexLoc,
 	normalLoc,
+	im,
 	pm,
 	vm,
-	mm,
 	wm,
 	m,
 	light = new Float32Array([.5, .5, -1]),
@@ -299,41 +299,75 @@ function draw() {
 		uniforms.brightness,
 		brightness)
 
-	rotate(vm, vm, M.sin(now * .001) * .005, 1, 1, 1)
-
 	bindModel(tri)
 
-	translate(m, mm, 10, 0, -25)
+	translate(m, im, 10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, tri, colorBlue)
 
 	bindModel(cube)
 
-	translate(m, mm, 0, M.sin(now * .001), -10)
+	translate(m, im, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
 	rotate(m, m, (now * .001) % 6.283, 0, 0, 1)
 	drawModel(m, cube, colorWhite)
 
-	translate(m, mm, M.sin(now * .001) * 5, 0, -16)
+	translate(m, im, M.sin(now * .001) * 5, 0, -16)
 	rotate(m, m, -2, 1, 0, 0)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, cube, colorRed)
 
-	translate(m, mm, 0, M.sin(now * .001) * 7, -24)
+	translate(m, im, 0, M.sin(now * .001) * 7, -24)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, cube, colorGreen)
 
 	var t = now * .002
 	for (var y = -20; y < 20; y += 2) {
 		for (var x = -20; x < 20; x += 2) {
-			translate(m, mm, x, y, -30)
-			rotate(m, m, ((t + x + y) * .5) % 6.283, 1, 0, 0)
+			translate(m, im, x, y, -30 + M.sin(t + (x + y) * .2))
 			drawModel(m, cube, (x + y) % 4 == 0 ? colorWhite : colorBlue)
 		}
 	}
 }
 
+function turn(rad, x, y, z) {
+	rotate(m, im, rad, x, y, z)
+	multiply(vm, m, vm)
+}
+
+function move(x, y, z) {
+	translate(m, im, x, y, z)
+	multiply(vm, m, vm)
+}
+
 function input() {
+	var step = .1
+
+	if (keysDown[65]) {
+		move(step, 0, 0)
+	} else if (keysDown[68]) {
+		move(-step, 0, 0)
+	}
+
+	if (keysDown[87]) {
+		move(0, 0, step)
+	} else if (keysDown[83]) {
+		move(0, 0, -step)
+	}
+
+	step = .01
+
+	if (keysDown[37]) {
+		turn(-step, 0, 0, 1)
+	} else if (keysDown[39]) {
+		turn(step, 0, 0, 1)
+	}
+
+	if (keysDown[38]) {
+		turn(step, 1, 0, 0)
+	} else if (keysDown[40]) {
+		turn(-step, 1, 0, 0)
+	}
 }
 
 function run() {
@@ -449,11 +483,11 @@ function buildProgram(vertexSource, fragmentSource) {
 }
 
 function resize() {
-	width = gl.canvas.clientWidth;
-	height = gl.canvas.clientHeight;
+	width = gl.canvas.clientWidth
+	height = gl.canvas.clientHeight
 
-	gl.canvas.width = width;
-	gl.canvas.height = height;
+	gl.canvas.width = width
+	gl.canvas.height = height
 	gl.viewport(0, 0, width, height)
 
 	var aspect = width / height,
@@ -474,10 +508,10 @@ function resize() {
 		0, 0, 1, 0,
 		0, 0, 0, 1]
 
+	im = new Float32Array(identity)
 	vm = new Float32Array(identity)
-	mm = new Float32Array(identity)
-	wm = new Float32Array(identity);
-	m = new Float32Array(identity);
+	wm = new Float32Array(identity)
+	m = new Float32Array(identity)
 }
 
 function cacheUniformLocation(program, name) {
@@ -495,7 +529,7 @@ function cacheUniformLocations(program) {
 		"light",
 		"color",
 		"brightness"
-	];
+	]
 
 	for (var i = 0, l = uniforms.length; i < l; ++i) {
 		cacheUniformLocation(program, uniforms[i])
