@@ -83,6 +83,7 @@ var M = Math,
 	light = new Float32Array([.5, .5, -1]),
 	brightness = 1,
 	program,
+	plane,
 	tri,
 	cube,
 	width,
@@ -260,7 +261,7 @@ function drawModel(matrix, model, color) {
 			gl.UNSIGNED_SHORT,
 			0)
 	} else {
-		gl.drawArrays(gl.TRIANGLES, 0, model.numberOfVertices)
+		gl.drawArrays(gl.TRIANGLE_STRIP, 0, model.numberOfVertices)
 	}
 }
 
@@ -298,6 +299,12 @@ function draw() {
 	gl.uniform1f(
 		uniforms.brightness,
 		brightness)
+
+	bindModel(plane)
+
+	translate(m, im, -10, 0, -25)
+	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
+	drawModel(m, plane, colorRed)
 
 	bindModel(tri)
 
@@ -687,6 +694,32 @@ function createTriangle() {
 	return model
 }
 
+function createPlane() {
+	var model = {numberOfVertices: 4}
+
+	model.vertices = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array([
+			-1, 1, 0,
+			-1, -1, 0,
+			1, 1, 0,
+			1, -1, 0]),
+		gl.STATIC_DRAW)
+
+	model.normals = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new Float32Array([
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1,
+			0, 0, 1]),
+		gl.STATIC_DRAW)
+
+	return model
+}
+
 function init() {
 	if (!(canvas = D.getElementById("Canvas"))) {
 		return
@@ -704,6 +737,7 @@ function init() {
 		return
 	}
 
+	plane = createPlane()
 	tri = createTriangle()
 	cube = createCube()
 
