@@ -42,7 +42,7 @@ void main() {
 			wm[0][0], wm[0][1], wm[0][2],
 			wm[1][0], wm[1][1], wm[1][2],
 			wm[2][0], wm[2][1], wm[2][2]) * normal),
-		light));
+		normalize(light)));
 }
 
 </script>
@@ -85,7 +85,7 @@ var M = Math,
 	vm,
 	wm,
 	m,
-	light = [.5, .5, -1],
+	light = [.5, .5, 1],
 	horizonColor = [.2, .5, .8, 1],
 	brightness = 1,
 	program,
@@ -243,7 +243,7 @@ function translate(out, a, x, y, z) {
 }
 
 function drawModel(matrix, model, color) {
-	multiply(wm, pm, matrix)
+	translate(wm, matrix)
 	multiply(matrix, vm, matrix)
 	multiply(matrix, pm, matrix)
 
