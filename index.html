@@ -242,8 +242,14 @@ function translate(out, a, x, y, z) {
 	}
 }
 
+function copy(out, a) {
+	for (var i = 16; i--;) {
+		out[i] = a[i]
+	}
+}
+
 function drawModel(matrix, model, color) {
-	translate(wm, matrix)
+	copy(wm, matrix)
 	multiply(matrix, vm, matrix)
 	multiply(matrix, pm, matrix)
 
