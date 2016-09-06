@@ -78,8 +78,6 @@ var M = Math,
 	W = window,
 	canvas,
 	gl,
-	vertexLoc,
-	normalLoc,
 	im,
 	pm,
 	vm,
@@ -277,10 +275,10 @@ function drawModel(matrix, model, color) {
 	}
 }
 
-function bindModel(model) {
+function bindModel(attribs, model) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.vertexAttribPointer(
-		vertexLoc,
+		attribs.vertex,
 		3,
 		gl.FLOAT,
 		gl.FALSE,
@@ -288,7 +286,7 @@ function bindModel(model) {
 		0)
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.vertexAttribPointer(
-		normalLoc,
+		attribs.normal,
 		3,
 		gl.FLOAT,
 		gl.FALSE,
@@ -315,7 +313,8 @@ function draw() {
 		uniforms.brightness,
 		brightness)
 
-	bindModel(plane)
+	var attribs = program.attribs
+	bindModel(attribs, plane)
 
 	translate(m, im, -10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
@@ -325,13 +324,13 @@ function draw() {
 	scale(m, m, 1000, 1000, 1000)
 	drawModel(m, plane, colorGreen)
 
-	bindModel(tri)
+	bindModel(attribs, tri)
 
 	translate(m, im, 10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, tri, colorBlue)
 
-	bindModel(cube)
+	bindModel(attribs, cube)
 
 	translate(m, im, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
@@ -540,38 +539,25 @@ function resize() {
 	m = new Float32Array(identity)
 }
 
-function cacheUniformLocation(program, name) {
+function cacheUniformLocations(program, uniforms) {
 	if (program.uniforms === undefined) {
 		program.uniforms = {}
 	}
-
-	program.uniforms[name] = gl.getUniformLocation(program, name)
-}
-
-function cacheUniformLocations(program) {
-	var uniforms = [
-		"mvp",
-		"wm",
-		"light",
-		"color",
-		"horizon",
-		"brightness"
-	]
-
 	for (var i = 0, l = uniforms.length; i < l; ++i) {
-		cacheUniformLocation(program, uniforms[i])
+		var name = uniforms[i]
+		program.uniforms[name] = gl.getUniformLocation(program, name)
 	}
 }
 
-function cacheAttribLocations(program) {
-	vertexLoc = gl.getAttribLocation(
-		program,
-		"vertex")
-	gl.enableVertexAttribArray(vertexLoc)
-	normalLoc = gl.getAttribLocation(
-		program,
-		"normal")
-	gl.enableVertexAttribArray(normalLoc)
+function cacheAttribLocations(program, attribs) {
+	if (program.attribs === undefined) {
+		program.attribs = {}
+	}
+	for (var i = 0, l = attribs.length; i < l; ++i) {
+		var name = attribs[i]
+		program.attribs[name] = gl.getAttribLocation(program, name)
+		gl.enableVertexAttribArray(program.attribs[name])
+	}
 }
 
 function calculateNormals(vertices, indicies) {
@@ -775,8 +761,16 @@ function init() {
 		horizonColor[2],
 		horizonColor[3])
 
-	cacheAttribLocations(program)
-	cacheUniformLocations(program)
+	cacheAttribLocations(program, [
+		"vertex",
+		"normal"])
+	cacheUniformLocations(program, [
+		"mvp",
+		"wm",
+		"light",
+		"color",
+		"horizon",
+		"brightness"])
 
 	W.onresize = resize
 	resize()
