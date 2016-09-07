@@ -30,8 +30,8 @@ uniform mat4 mvp;
 uniform mat4 mm;
 uniform vec3 light;
 
-varying float intensity;
-varying float z;
+varying mediump float intensity;
+varying mediump float z;
 
 void main() {
 	gl_Position = mvp * vec4(vertex, 1.0);
@@ -58,8 +58,8 @@ uniform float brightness;
 uniform vec4 color;
 uniform vec4 sky;
 
-varying float intensity;
-varying float z;
+varying mediump float intensity;
+varying mediump float z;
 
 void main() {
 	float f = z / 100.0;
