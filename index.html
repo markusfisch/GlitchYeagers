@@ -27,7 +27,7 @@ attribute vec3 vertex;
 attribute vec3 normal;
 
 uniform mat4 mvp;
-uniform mat4 wm;
+uniform mat4 mm;
 uniform vec3 light;
 
 varying float intensity;
@@ -39,9 +39,9 @@ void main() {
 	intensity = max(.0, dot(
 		normalize(mat3(
 			// transpose matrix
-			wm[0][0], wm[0][1], wm[0][2],
-			wm[1][0], wm[1][1], wm[1][2],
-			wm[2][0], wm[2][1], wm[2][2]) * normal),
+			mm[0][0], mm[0][1], mm[0][2],
+			mm[1][0], mm[1][1], mm[1][2],
+			mm[2][0], mm[2][1], mm[2][2]) * normal),
 		normalize(light)));
 }
 
@@ -56,7 +56,7 @@ precision mediump float;
 
 uniform float brightness;
 uniform vec4 color;
-uniform vec4 horizon;
+uniform vec4 sky;
 
 varying float intensity;
 varying float z;
@@ -65,7 +65,7 @@ void main() {
 	float f = z / 100.0;
 	gl_FragColor =
 		(1.0 - f) * color * max(.3, intensity) * brightness +
-		f * horizon;
+		f * sky;
 }
 
 </script>
@@ -76,15 +76,16 @@ void main() {
 var M = Math,
 	D = document,
 	W = window,
+	FA = Float32Array,
 	canvas,
 	gl,
 	im,
 	pm,
 	vm,
-	wm,
-	m,
+	mm = new FA(16),
+	m = new FA(16),
 	light = [.5, .5, 1],
-	horizonColor = [.2, .5, .8, 1],
+	skyColor = [.2, .5, .8, 1],
 	brightness = 1,
 	program,
 	plane,
@@ -247,7 +248,7 @@ function copy(out, a) {
 }
 
 function drawModel(matrix, model, color) {
-	copy(wm, matrix)
+	copy(mm, matrix)
 	multiply(matrix, vm, matrix)
 	multiply(matrix, pm, matrix)
 
@@ -257,9 +258,9 @@ function drawModel(matrix, model, color) {
 		gl.FALSE,
 		matrix)
 	gl.uniformMatrix4fv(
-		uniforms.wm,
+		uniforms.mm,
 		gl.FALSE,
-		wm)
+		mm)
 	gl.uniform4fv(
 		uniforms.color,
 		color)
@@ -307,8 +308,8 @@ function draw() {
 		uniforms.light,
 		light)
 	gl.uniform4fv(
-		uniforms.horizon,
-		horizonColor)
+		uniforms.sky,
+		skyColor)
 	gl.uniform1f(
 		uniforms.brightness,
 		brightness)
@@ -465,6 +466,57 @@ function keyDown(event) {
 	setKey(event, true)
 }
 
+function resize() {
+	width = gl.canvas.clientWidth
+	height = gl.canvas.clientHeight
+
+	gl.canvas.width = width
+	gl.canvas.height = height
+	gl.viewport(0, 0, width, height)
+
+	var aspect = width / height,
+		near = .1,
+		far = 100,
+		r = near - far,
+		f = 1 / M.tan(M.PI * .125)
+
+	pm = new FA([
+		f / aspect, 0, 0, 0,
+		0, f, 0, 0,
+		0, 0, (far + near) / r, -1,
+		0, 0, (2 * far * near) / r, 0])
+
+	var identity = [
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1]
+
+	im = new FA(identity)
+	vm = new FA(identity)
+}
+
+function cacheUniformLocations(program, uniforms) {
+	if (program.uniforms === undefined) {
+		program.uniforms = {}
+	}
+	for (var i = 0, l = uniforms.length; i < l; ++i) {
+		var name = uniforms[i]
+		program.uniforms[name] = gl.getUniformLocation(program, name)
+	}
+}
+
+function cacheAttribLocations(program, attribs) {
+	if (program.attribs === undefined) {
+		program.attribs = {}
+	}
+	for (var i = 0, l = attribs.length; i < l; ++i) {
+		var name = attribs[i]
+		program.attribs[name] = gl.getAttribLocation(program, name)
+		gl.enableVertexAttribArray(program.attribs[name])
+	}
+}
+
 function compileShader(src, type) {
 	var shader = gl.createShader(type)
 
@@ -505,59 +557,6 @@ function buildProgram(vertexSource, fragmentSource) {
 	}
 
 	return p
-}
-
-function resize() {
-	width = gl.canvas.clientWidth
-	height = gl.canvas.clientHeight
-
-	gl.canvas.width = width
-	gl.canvas.height = height
-	gl.viewport(0, 0, width, height)
-
-	var aspect = width / height,
-		near = 1,
-		far = 100,
-		r = near - far,
-		f = 1 / M.tan(M.PI * .125)
-
-	pm = new Float32Array([
-		f/aspect, 0, 0, 0,
-		0, f, 0, 0,
-		0, 0, (far + near) / r, -1,
-		0, 0, (2 * far * near) / r, 0])
-
-	var identity = [
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1]
-
-	im = new Float32Array(identity)
-	vm = new Float32Array(identity)
-	wm = new Float32Array(identity)
-	m = new Float32Array(identity)
-}
-
-function cacheUniformLocations(program, uniforms) {
-	if (program.uniforms === undefined) {
-		program.uniforms = {}
-	}
-	for (var i = 0, l = uniforms.length; i < l; ++i) {
-		var name = uniforms[i]
-		program.uniforms[name] = gl.getUniformLocation(program, name)
-	}
-}
-
-function cacheAttribLocations(program, attribs) {
-	if (program.attribs === undefined) {
-		program.attribs = {}
-	}
-	for (var i = 0, l = attribs.length; i < l; ++i) {
-		var name = attribs[i]
-		program.attribs[name] = gl.getAttribLocation(program, name)
-		gl.enableVertexAttribArray(program.attribs[name])
-	}
 }
 
 function calculateNormals(vertices, indicies) {
@@ -658,7 +657,7 @@ function createCube() {
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array(vertices),
+		new FA(vertices),
 		gl.STATIC_DRAW)
 
 	model.indicies = gl.createBuffer()
@@ -670,7 +669,7 @@ function createCube() {
 	model.normals = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array(calculateNormals(vertices, indicies)),
+		new FA(calculateNormals(vertices, indicies)),
 		gl.STATIC_DRAW)
 
 	return model
@@ -682,7 +681,7 @@ function createTriangle() {
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array([
+		new FA([
 			0, -1, 0,
 			1, 1, 0,
 			-1, 1, 0]),
@@ -691,7 +690,7 @@ function createTriangle() {
 	model.normals = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array([
+		new FA([
 			0, 0, 1,
 			0, 0, 1,
 			0, 0, 1]),
@@ -706,7 +705,7 @@ function createPlane() {
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array([
+		new FA([
 			-1, 1, 0,
 			-1, -1, 0,
 			1, 1, 0,
@@ -716,7 +715,7 @@ function createPlane() {
 	model.normals = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new Float32Array([
+		new FA([
 			0, 0, 1,
 			0, 0, 1,
 			0, 0, 1,
@@ -756,20 +755,20 @@ function init() {
 
 	gl.enable(gl.DEPTH_TEST)
 	gl.clearColor(
-		horizonColor[0],
-		horizonColor[1],
-		horizonColor[2],
-		horizonColor[3])
+		skyColor[0],
+		skyColor[1],
+		skyColor[2],
+		skyColor[3])
 
 	cacheAttribLocations(program, [
 		"vertex",
 		"normal"])
 	cacheUniformLocations(program, [
 		"mvp",
-		"wm",
+		"mm",
 		"light",
 		"color",
-		"horizon",
+		"sky",
 		"brightness"])
 
 	W.onresize = resize
