@@ -97,6 +97,7 @@ var M = Math,
 	models,
 	objectsLength = 0,
 	objects = [],
+	player,
 	width,
 	height,
 	now,
@@ -364,6 +365,22 @@ function draw() {
 	}
 }
 
+function updatePlayerMatrix() {
+	var x = player.matrix,
+		p = player.pitch,
+		y = player.yaw,
+		r = player.roll,
+		mag = -20
+	translate(x, cm, 0, 0, -4)
+	if (r !== 0) {
+		rotate(x, x, r * mag, 0, 0, 1)
+	}
+	if (y !== 0) {
+		rotate(x, x, y * mag, 0, 1, 0)
+	}
+	rotate(x, x, M.PI * -.47 + p * mag, 1, 0, 0)
+}
+
 function sqDist(a, b) {
 	var dx = a[12] - b[12],
 		dy = a[13] - b[13],
@@ -375,14 +392,33 @@ function dist(a, b) {
 	return M.sqrt(sqDist(a, b))
 }
 
-function viewSqDist(a) {
-	return sqDist(a, cm)
+function crash() {
+	for (var i = objectsLength; i--;) {
+		var o = objects[i]
+		if (o !== player && sqDist(o.matrix, player.matrix) < 2) {
+			return true
+		}
+	}
+	return false
 }
 
 function turn(rad, x, y, z) {
+	translate(sm, vm, 0, 0, 0)
 	rotate(m, im, rad, x, y, z)
 	multiply(vm, m, vm)
 	invert(cm, vm)
+	if (crash()) {
+		translate(vm, sm, 0, 0, 0)
+	}
+	if (x !== 0) {
+		player.pitch = rad
+	}
+	if (y !== 0) {
+		player.yaw = rad
+	}
+	if (z !== 0) {
+		player.roll = rad
+	}
 }
 
 function move(x, y, z) {
@@ -390,12 +426,8 @@ function move(x, y, z) {
 	translate(m, im, x, y, z)
 	multiply(vm, m, vm)
 	invert(cm, vm)
-
-	for (var i = objectsLength; i--;) {
-		if (viewSqDist(objects[i].matrix) < 2) {
-			translate(vm, sm, 0, 0, 0)
-			return
-		}
+	if (crash()) {
+		translate(vm, sm, 0, 0, 0)
 	}
 }
 
@@ -415,6 +447,7 @@ function input() {
 	}
 
 	step = .01
+	player.pitch = player.yaw = player.roll = 0
 
 	if (keysDown[37]) {
 		turn(-step, 0, 0, 1)
@@ -427,6 +460,8 @@ function input() {
 	} else if (keysDown[40]) {
 		turn(-step, 1, 0, 0)
 	}
+
+	updatePlayerMatrix()
 }
 
 function run() {
@@ -711,9 +746,9 @@ function createCube() {
 
 function createTriangle() {
 	return createModel([
-		0, -1, 0,
-		1, 1, 0,
-		-1, 1, 0],[
+		0, 1, 0,
+		-1, -1, 0,
+		1, -1, 0],[
 		0, 0, 1,
 		0, 0, 1,
 		0, 0, 1])
@@ -758,6 +793,11 @@ function createObjects() {
 			matrix: new FA(m),
 			color: i % 2 > 0 ? colorWhite : colorRed})
 	}
+
+	objects.push((player = {
+		model: tri,
+		matrix: new FA(m),
+		color: colorBlue}))
 
 	objectsLength = objects.length
 }
