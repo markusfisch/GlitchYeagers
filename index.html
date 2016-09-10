@@ -91,9 +91,7 @@ var M = Math,
 	light = [.5, .5, 1],
 	brightness = 1,
 	program,
-	plane,
-	tri,
-	cube,
+	models,
 	width,
 	height,
 	now,
@@ -294,11 +292,10 @@ function translate(out, a, x, y, z) {
 	}
 }
 
-function drawModel(mm, model, color) {
+function drawModel(mm, model, uniforms, color) {
 	multiply(m2, vm, mm)
 	multiply(m2, pm, m2)
 
-	var uniforms = program.uniforms
 	gl.uniformMatrix4fv(uniforms.mvp, gl.FALSE, m2)
 	gl.uniformMatrix4fv(uniforms.mm, gl.FALSE, mm)
 	gl.uniform4fv(uniforms.color, color)
@@ -341,44 +338,49 @@ function draw() {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
 
-	var uniforms = program.uniforms
+	var uniforms = program.uniforms,
+		attribs = program.attribs,
+		model
+
 	gl.uniform3fv(uniforms.light, light)
 	gl.uniform4fv(uniforms.sky, skyColor)
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
-	var attribs = program.attribs
-	bindModel(attribs, plane)
+	model = models.plane
+	bindModel(attribs, model)
 
 	translate(m, im, -10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, plane, colorRed)
+	drawModel(m, model, uniforms, colorRed)
 
 	translate(m, im, 0, 0, -50)
 	scale(m, m, far, far, 1)
-	drawModel(m, plane, colorGreen)
+	drawModel(m, model, uniforms, colorGreen)
 
-	bindModel(attribs, tri)
+	model = models.tri
+	bindModel(attribs, model)
 
 	translate(m, im, 10, 0, -25)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, tri, colorBlue)
+	drawModel(m, model, uniforms, colorBlue)
 
-	bindModel(attribs, cube)
+	model = models.cube
+	bindModel(attribs, model)
 
 	translate(m, im, 0, M.sin(now * .001), -10)
 	rotate(m, m, -1, 1, 0, 0)
 	rotate(m, m, (now * .001) % 6.283, 0, 0, 1)
-	drawModel(m, cube, colorWhite)
+	drawModel(m, model, uniforms, colorWhite)
 
 	translate(m, im, M.sin(now * .001) * 5, 0, -16)
 	rotate(m, m, -2, 1, 0, 0)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, cube, colorRed)
+	drawModel(m, model, uniforms, colorRed)
 
 	translate(m, im, 0, M.sin(now * .001) * 7, -24)
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, cube, colorGreen)
+	drawModel(m, model, uniforms, colorGreen)
 
 	var t = now * .002,
 		size = 10,
@@ -389,7 +391,8 @@ function draw() {
 		for (var x = -h; x < h; x += step) {
 			translate(m, im, x, y, -30 + M.sin(t + ((x + y) / step) * .2))
 			scale(m, m, size, size, 1)
-			drawModel(m, cube, (x + y) % odd == 0 ? colorWhite : colorBlue)
+			drawModel(m, model, uniforms,
+				(x + y) % odd == 0 ? colorWhite : colorBlue)
 		}
 	}
 }
@@ -797,9 +800,11 @@ function init() {
 		return
 	}
 
-	plane = createPlane()
-	tri = createTriangle()
-	cube = createCube()
+	models = {
+		plane: createPlane(),
+		tri: createTriangle(),
+		cube: createCube(),
+	}
 
 	if (!(program = buildProgram(
 			D.getElementById("VertexShader").textContent,
@@ -809,11 +814,7 @@ function init() {
 	}
 
 	gl.enable(gl.DEPTH_TEST)
-	gl.clearColor(
-		skyColor[0],
-		skyColor[1],
-		skyColor[2],
-		skyColor[3])
+	gl.clearColor(skyColor[0], skyColor[1], skyColor[2], skyColor[3])
 
 	cacheAttribLocations(program, [
 		"vertex",
