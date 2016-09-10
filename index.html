@@ -301,6 +301,12 @@ function translate(out, a, x, y, z) {
 	}
 }
 
+function copy(out, a) {
+	for (var i = 16; i--;) {
+		out[i] = a[i]
+	}
+}
+
 function drawModel(mm, model, uniforms, color) {
 	multiply(m, vm, mm)
 	multiply(m, pm, m)
@@ -403,13 +409,14 @@ function crash() {
 }
 
 function turn(rad, x, y, z) {
-	translate(sm, vm, 0, 0, 0)
+	copy(sm, vm)
 	rotate(m, im, rad, x, y, z)
 	multiply(vm, m, vm)
-	invert(cm, vm)
 	if (crash()) {
-		translate(vm, sm, 0, 0, 0)
+		copy(vm, sm)
+		return
 	}
+	invert(cm, vm)
 	if (x !== 0) {
 		player.pitch = rad
 	}
@@ -422,13 +429,14 @@ function turn(rad, x, y, z) {
 }
 
 function move(x, y, z) {
-	translate(sm, vm, 0, 0, 0)
+	copy(sm, vm)
 	translate(m, im, x, y, z)
 	multiply(vm, m, vm)
-	invert(cm, vm)
 	if (crash()) {
-		translate(vm, sm, 0, 0, 0)
+		copy(vm, sm)
+		return
 	}
+	invert(cm, vm)
 }
 
 function input() {
