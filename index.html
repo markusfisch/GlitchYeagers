@@ -55,14 +55,15 @@ precision mediump float;
 #endif
 
 uniform float brightness;
-uniform vec4 color;
+uniform float far;
 uniform vec4 sky;
+uniform vec4 color;
 
 varying mediump float intensity;
 varying mediump float z;
 
 void main() {
-	float f = z / 100.0;
+	float f = z / far;
 	gl_FragColor =
 		(1.0 - f) * color * max(.3, intensity) * brightness +
 		f * sky;
@@ -82,10 +83,12 @@ var M = Math,
 	im,
 	pm,
 	vm,
-	mm = new FA(16),
+	cm = new FA(16),
 	m = new FA(16),
-	light = [.5, .5, 1],
+	m2 = new FA(16),
+	far = 500,
 	skyColor = [.2, .5, .8, 1],
+	light = [.5, .5, 1],
 	brightness = 1,
 	program,
 	plane,
@@ -104,6 +107,56 @@ var M = Math,
 	colorRed = [1, 0, 0, 1],
 	colorGreen = [0, 1, 0, 1],
 	colorBlue = [0, 0, 1, 1]
+
+// stolen from https://github.com/toji/gl-matrix
+function invert(out, a) {
+	var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
+		a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
+		a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
+		a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
+		b00 = a00 * a11 - a01 * a10,
+		b01 = a00 * a12 - a02 * a10,
+		b02 = a00 * a13 - a03 * a10,
+		b03 = a01 * a12 - a02 * a11,
+		b04 = a01 * a13 - a03 * a11,
+		b05 = a02 * a13 - a03 * a12,
+		b06 = a20 * a31 - a21 * a30,
+		b07 = a20 * a32 - a22 * a30,
+		b08 = a20 * a33 - a23 * a30,
+		b09 = a21 * a32 - a22 * a31,
+		b10 = a21 * a33 - a23 * a31,
+		b11 = a22 * a33 - a23 * a32,
+		// calculate the determinant
+		d = b00 * b11 -
+			b01 * b10 +
+			b02 * b09 +
+			b03 * b08 -
+			b04 * b07 +
+			b05 * b06
+
+	if (!d) {
+		return null
+	}
+
+	d = 1.0 / d
+
+	out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * d
+	out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * d
+	out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * d
+	out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * d
+	out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * d
+	out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * d
+	out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * d
+	out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * d
+	out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * d
+	out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * d
+	out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * d
+	out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * d
+	out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * d
+	out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * d
+	out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * d
+	out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * d
+}
 
 // stolen from https://github.com/toji/gl-matrix
 function multiply(out, a, b) {
@@ -241,29 +294,14 @@ function translate(out, a, x, y, z) {
 	}
 }
 
-function copy(out, a) {
-	for (var i = 16; i--;) {
-		out[i] = a[i]
-	}
-}
-
-function drawModel(matrix, model, color) {
-	copy(mm, matrix)
-	multiply(matrix, vm, matrix)
-	multiply(matrix, pm, matrix)
+function drawModel(mm, model, color) {
+	multiply(m2, vm, mm)
+	multiply(m2, pm, m2)
 
 	var uniforms = program.uniforms
-	gl.uniformMatrix4fv(
-		uniforms.mvp,
-		gl.FALSE,
-		matrix)
-	gl.uniformMatrix4fv(
-		uniforms.mm,
-		gl.FALSE,
-		mm)
-	gl.uniform4fv(
-		uniforms.color,
-		color)
+	gl.uniformMatrix4fv(uniforms.mvp, gl.FALSE, m2)
+	gl.uniformMatrix4fv(uniforms.mm, gl.FALSE, mm)
+	gl.uniform4fv(uniforms.color, color)
 
 	if (model.indicies) {
 		gl.drawElements(
@@ -304,15 +342,10 @@ function draw() {
 	gl.useProgram(program)
 
 	var uniforms = program.uniforms
-	gl.uniform3fv(
-		uniforms.light,
-		light)
-	gl.uniform4fv(
-		uniforms.sky,
-		skyColor)
-	gl.uniform1f(
-		uniforms.brightness,
-		brightness)
+	gl.uniform3fv(uniforms.light, light)
+	gl.uniform4fv(uniforms.sky, skyColor)
+	gl.uniform1f(uniforms.brightness, brightness)
+	gl.uniform1f(uniforms.far, far)
 
 	var attribs = program.attribs
 	bindModel(attribs, plane)
@@ -322,7 +355,7 @@ function draw() {
 	drawModel(m, plane, colorRed)
 
 	translate(m, im, 0, 0, -50)
-	scale(m, m, 1000, 1000, 1000)
+	scale(m, m, far, far, 1)
 	drawModel(m, plane, colorGreen)
 
 	bindModel(attribs, tri)
@@ -347,23 +380,45 @@ function draw() {
 	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
 	drawModel(m, cube, colorGreen)
 
-	var t = now * .002
-	for (var y = -20; y < 20; y += 2) {
-		for (var x = -20; x < 20; x += 2) {
-			translate(m, im, x, y, -30 + M.sin(t + (x + y) * .2))
-			drawModel(m, cube, (x + y) % 4 == 0 ? colorWhite : colorBlue)
+	var t = now * .002,
+		size = 10,
+		step = 2 * size,
+		h = 20 * size,
+		odd = step * 2
+	for (var y = -h; y < h; y += step) {
+		for (var x = -h; x < h; x += step) {
+			translate(m, im, x, y, -30 + M.sin(t + ((x + y) / step) * .2))
+			scale(m, m, size, size, 1)
+			drawModel(m, cube, (x + y) % odd == 0 ? colorWhite : colorBlue)
 		}
 	}
+}
+
+function sqDist(a, b) {
+	var dx = a[12] - b[12],
+		dy = a[13] - b[13],
+		dz = a[14] - b[14]
+	return dx*dx + dy*dy + dz*dz
+}
+
+function dist(a, b) {
+	return M.sqrt(sqDist(a, b))
+}
+
+function viewSqDist(a) {
+	return sqDist(a, cm)
 }
 
 function turn(rad, x, y, z) {
 	rotate(m, im, rad, x, y, z)
 	multiply(vm, m, vm)
+	invert(cm, vm)
 }
 
 function move(x, y, z) {
 	translate(m, im, x, y, z)
 	multiply(vm, m, vm)
+	invert(cm, vm)
 }
 
 function input() {
@@ -476,7 +531,6 @@ function resize() {
 
 	var aspect = width / height,
 		near = .1,
-		far = 100,
 		r = near - far,
 		f = 1 / M.tan(M.PI * .125)
 
@@ -494,6 +548,7 @@ function resize() {
 
 	im = new FA(identity)
 	vm = new FA(identity)
+	invert(cm, vm)
 }
 
 function cacheUniformLocations(program, uniforms) {
@@ -769,7 +824,8 @@ function init() {
 		"light",
 		"color",
 		"sky",
-		"brightness"])
+		"brightness",
+		"far"])
 
 	W.onresize = resize
 	resize()
