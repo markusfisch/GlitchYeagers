@@ -72,26 +72,31 @@ void main() {
 </script>
 <script>
 
-"use strict"
+'use strict'
 
 var M = Math,
 	D = document,
 	W = window,
 	FA = Float32Array,
-	canvas,
 	gl,
-	im,
+	im = new FA([
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1]),
 	pm,
-	vm,
+	vm = new FA(im),
 	cm = new FA(16),
+	sm = new FA(16),
 	m = new FA(16),
-	m2 = new FA(16),
 	far = 500,
 	skyColor = [.2, .5, .8, 1],
 	light = [.5, .5, 1],
 	brightness = 1,
 	program,
 	models,
+	objectsLength = 0,
+	objects = [],
 	width,
 	height,
 	now,
@@ -105,6 +110,9 @@ var M = Math,
 	colorRed = [1, 0, 0, 1],
 	colorGreen = [0, 1, 0, 1],
 	colorBlue = [0, 0, 1, 1]
+
+M.PI2 = M.PI2 || M.PI / 2
+M.TAU = M.TAU || M.PI * 2
 
 // stolen from https://github.com/toji/gl-matrix
 function invert(out, a) {
@@ -293,10 +301,10 @@ function translate(out, a, x, y, z) {
 }
 
 function drawModel(mm, model, uniforms, color) {
-	multiply(m2, vm, mm)
-	multiply(m2, pm, m2)
+	multiply(m, vm, mm)
+	multiply(m, pm, m)
 
-	gl.uniformMatrix4fv(uniforms.mvp, gl.FALSE, m2)
+	gl.uniformMatrix4fv(uniforms.mvp, gl.FALSE, m)
 	gl.uniformMatrix4fv(uniforms.mm, gl.FALSE, mm)
 	gl.uniform4fv(uniforms.color, color)
 
@@ -339,61 +347,20 @@ function draw() {
 	gl.useProgram(program)
 
 	var uniforms = program.uniforms,
-		attribs = program.attribs,
-		model
+		attribs = program.attribs
 
 	gl.uniform3fv(uniforms.light, light)
 	gl.uniform4fv(uniforms.sky, skyColor)
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
-	model = models.plane
-	bindModel(attribs, model)
-
-	translate(m, im, -10, 0, -25)
-	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, model, uniforms, colorRed)
-
-	translate(m, im, 0, 0, -50)
-	scale(m, m, far, far, 1)
-	drawModel(m, model, uniforms, colorGreen)
-
-	model = models.tri
-	bindModel(attribs, model)
-
-	translate(m, im, 10, 0, -25)
-	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, model, uniforms, colorBlue)
-
-	model = models.cube
-	bindModel(attribs, model)
-
-	translate(m, im, 0, M.sin(now * .001), -10)
-	rotate(m, m, -1, 1, 0, 0)
-	rotate(m, m, (now * .001) % 6.283, 0, 0, 1)
-	drawModel(m, model, uniforms, colorWhite)
-
-	translate(m, im, M.sin(now * .001) * 5, 0, -16)
-	rotate(m, m, -2, 1, 0, 0)
-	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, model, uniforms, colorRed)
-
-	translate(m, im, 0, M.sin(now * .001) * 7, -24)
-	rotate(m, m, (now * .002) % 6.283, 1, 1, 1)
-	drawModel(m, model, uniforms, colorGreen)
-
-	var t = now * .002,
-		size = 10,
-		step = 2 * size,
-		h = 20 * size,
-		odd = step * 2
-	for (var y = -h; y < h; y += step) {
-		for (var x = -h; x < h; x += step) {
-			translate(m, im, x, y, -30 + M.sin(t + ((x + y) / step) * .2))
-			scale(m, m, size, size, 1)
-			drawModel(m, model, uniforms,
-				(x + y) % odd == 0 ? colorWhite : colorBlue)
+	for (var model, i = objectsLength; i--;) {
+		var o = objects[i]
+		if (model != o.model) {
+			model = o.model
+			bindModel(attribs, model)
 		}
+		drawModel(o.matrix, model, uniforms, o.color)
 	}
 }
 
@@ -419,9 +386,17 @@ function turn(rad, x, y, z) {
 }
 
 function move(x, y, z) {
+	translate(sm, vm, 0, 0, 0)
 	translate(m, im, x, y, z)
 	multiply(vm, m, vm)
 	invert(cm, vm)
+
+	for (var i = objectsLength; i--;) {
+		if (viewSqDist(objects[i].matrix) < 2) {
+			translate(vm, sm, 0, 0, 0)
+			return
+		}
+	}
 }
 
 function input() {
@@ -543,14 +518,6 @@ function resize() {
 		0, 0, (far + near) / r, -1,
 		0, 0, (2 * far * near) / r, 0])
 
-	var identity = [
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1]
-
-	im = new FA(identity)
-	vm = new FA(identity)
 	invert(cm, vm)
 }
 
@@ -659,58 +626,8 @@ function calculateNormals(vertices, indicies) {
 	return normals
 }
 
-function createCube() {
-	var vertices = [
-			// front
-			-1, -1, 1,
-			1, -1, 1,
-			-1, 1, 1,
-			1, 1, 1,
-			// right
-			1, -1, 1,
-			1, -1, -1,
-			1, 1, 1,
-			1, 1, -1,
-			// back
-			1, -1, -1,
-			-1, -1, -1,
-			1, 1, -1,
-			-1, 1, -1,
-			// left
-			-1, -1, -1,
-			-1, -1, 1,
-			-1, 1, -1,
-			-1, 1, 1,
-			// bottom
-			-1, -1, -1,
-			1, -1, -1,
-			-1, -1, 1,
-			1, -1, 1,
-			// top
-			-1, 1, 1,
-			1, 1, 1,
-			-1, 1, -1,
-			1, 1, -1],
-		indicies = [
-			// front
-			0, 1, 3,
-			0, 3, 2,
-			// right
-			4, 5, 7,
-			4, 7, 6,
-			// back
-			8, 9, 11,
-			8, 11, 10,
-			// left
-			12, 13, 15,
-			12, 15, 14,
-			// bottom
-			16, 17, 19,
-			16, 19, 18,
-			// top
-			20, 21, 23,
-			20, 23, 22],
-		model = {numberOfVertices: indicies.length}
+function createModel(vertices, normals) {
+	var model = {numberOfVertices: vertices.length / 3}
 
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
@@ -718,115 +635,168 @@ function createCube() {
 		new FA(vertices),
 		gl.STATIC_DRAW)
 
+	model.normals = gl.createBuffer()
+	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
+	gl.bufferData(gl.ARRAY_BUFFER,
+		new FA(normals),
+		gl.STATIC_DRAW)
+
+	return model
+}
+
+function createIndexedModel(vertices, indicies) {
+	var model = createModel(vertices, calculateNormals(vertices, indicies))
+	model.numberOfVertices = indicies.length
+
 	model.indicies = gl.createBuffer()
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
 		new Uint16Array(indicies),
 		gl.STATIC_DRAW)
 
-	model.normals = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new FA(calculateNormals(vertices, indicies)),
-		gl.STATIC_DRAW)
-
 	return model
+}
+
+function createCube() {
+	return createIndexedModel([
+		// front
+		-1, -1, 1,
+		1, -1, 1,
+		-1, 1, 1,
+		1, 1, 1,
+		// right
+		1, -1, 1,
+		1, -1, -1,
+		1, 1, 1,
+		1, 1, -1,
+		// back
+		1, -1, -1,
+		-1, -1, -1,
+		1, 1, -1,
+		-1, 1, -1,
+		// left
+		-1, -1, -1,
+		-1, -1, 1,
+		-1, 1, -1,
+		-1, 1, 1,
+		// bottom
+		-1, -1, -1,
+		1, -1, -1,
+		-1, -1, 1,
+		1, -1, 1,
+		// top
+		-1, 1, 1,
+		1, 1, 1,
+		-1, 1, -1,
+		1, 1, -1],[
+		// front
+		0, 1, 3,
+		0, 3, 2,
+		// right
+		4, 5, 7,
+		4, 7, 6,
+		// back
+		8, 9, 11,
+		8, 11, 10,
+		// left
+		12, 13, 15,
+		12, 15, 14,
+		// bottom
+		16, 17, 19,
+		16, 19, 18,
+		// top
+		20, 21, 23,
+		20, 23, 22])
 }
 
 function createTriangle() {
-	var model = {numberOfVertices: 3}
-
-	model.vertices = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new FA([
-			0, -1, 0,
-			1, 1, 0,
-			-1, 1, 0]),
-		gl.STATIC_DRAW)
-
-	model.normals = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new FA([
-			0, 0, 1,
-			0, 0, 1,
-			0, 0, 1]),
-		gl.STATIC_DRAW)
-
-	return model
+	return createModel([
+		0, -1, 0,
+		1, 1, 0,
+		-1, 1, 0],[
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1])
 }
 
 function createPlane() {
-	var model = {numberOfVertices: 4}
+	return createModel([
+		-1, 1, 0,
+		-1, -1, 0,
+		1, 1, 0,
+		1, -1, 0],[
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1])
+}
 
-	model.vertices = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new FA([
-			-1, 1, 0,
-			-1, -1, 0,
-			1, 1, 0,
-			1, -1, 0]),
-		gl.STATIC_DRAW)
-
-	model.normals = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
-	gl.bufferData(gl.ARRAY_BUFFER,
-		new FA([
-			0, 0, 1,
-			0, 0, 1,
-			0, 0, 1,
-			0, 0, 1]),
-		gl.STATIC_DRAW)
+function createGround() {
+	var model = {numberOfVertices: 0}
 
 	return model
 }
 
-function init() {
-	if (!(canvas = D.getElementById("Canvas"))) {
-		return
+function createObjects() {
+	var ground = createGround(),
+		plane = createPlane(),
+		tri = createTriangle(),
+		cube = createCube()
+
+	translate(m, im, 0, -50, 0)
+	rotate(m, m, M.PI2, 1, 0, 0)
+	scale(m, m, far, far, 1)
+	objects.push({
+		model: plane,
+		matrix: new FA(m),
+		color: colorGreen})
+
+	for (var i = 100; i--;) {
+		translate(m, im, 0, 0, -10 * (i + 1))
+		objects.push({
+			model: cube,
+			matrix: new FA(m),
+			color: i % 2 > 0 ? colorWhite : colorRed})
 	}
 
-	for (var types = ["webgl", "experimental-webgl"],
-			i = 0, l = types.length; i < l; ++i) {
-		if ((gl = canvas.getContext(types[i], { alpha: false }))) {
-			break
+	objectsLength = objects.length
+}
+
+function getContext() {
+	for (var canvas = D.getElementById('Canvas'),
+			ctx,
+			types = ['webgl', 'experimental-webgl'],
+			l = types.length,
+			i = 0; i < l; ++i) {
+		if ((ctx = canvas.getContext(types[i], {alpha: false}))) {
+			return ctx
 		}
 	}
+}
 
-	if (!gl) {
-		alert("WebGL not available")
+function init() {
+	if (!(gl = getContext()) || !(program = buildProgram(
+			D.getElementById('VertexShader').textContent,
+			D.getElementById('FragmentShader').textContent))) {
+		alert('WebGL not available')
 		return
 	}
 
-	models = {
-		plane: createPlane(),
-		tri: createTriangle(),
-		cube: createCube(),
-	}
-
-	if (!(program = buildProgram(
-			D.getElementById("VertexShader").textContent,
-			D.getElementById("FragmentShader").textContent))) {
-		alert("GLSL program did not link")
-		return
-	}
+	createObjects()
+	cacheAttribLocations(program, [
+		'vertex',
+		'normal'])
+	cacheUniformLocations(program, [
+		'mvp',
+		'mm',
+		'light',
+		'color',
+		'sky',
+		'brightness',
+		'far'])
 
 	gl.enable(gl.DEPTH_TEST)
 	gl.clearColor(skyColor[0], skyColor[1], skyColor[2], skyColor[3])
-
-	cacheAttribLocations(program, [
-		"vertex",
-		"normal"])
-	cacheUniformLocations(program, [
-		"mvp",
-		"mm",
-		"light",
-		"color",
-		"sky",
-		"brightness",
-		"far"])
 
 	W.onresize = resize
 	resize()
@@ -839,7 +809,7 @@ function init() {
 	D.onmouseup = pointerUp
 	D.onmouseout = pointerUp
 
-	if ("ontouchstart" in D) {
+	if ('ontouchstart' in D) {
 		D.ontouchstart = pointerDown
 		D.ontouchmove = pointerMove
 		D.ontouchend = pointerUp
