@@ -349,6 +349,18 @@ function bindModel(attribs, model) {
 	}
 }
 
+function flyTo(out, view, x, y, z, w) {
+	invert(m, view)
+	var vx = m[0] * x + m[4] * y + m[8] * z + m[12] * w,
+		vy = m[1] * x + m[5] * y + m[9] * z + m[13] * w,
+		vz = m[2] * x + m[6] * y + m[10] * z + m[14] * w,
+		roll = M.PI2 - M.atan2(vy, vx),
+		pitch = M.atan2(M.sqrt(vx * vx + vy * vy), -vz)
+
+	rotate(out, out, roll * -.01, 0, 0, 1)
+	rotate(out, out, pitch * .01, 1, 0, 0)
+}
+
 function draw() {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
@@ -361,6 +373,12 @@ function draw() {
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
+	var mx = player.matrix,
+		px = mx[12],
+		py = mx[13],
+		pz = mx[14],
+		pw = mx[15]
+
 	for (var model, i = objectsLength; i--;) {
 		var o = objects[i]
 		if (model != o.model) {
@@ -368,10 +386,15 @@ function draw() {
 			bindModel(attribs, model)
 		}
 		drawModel(o.matrix, model, uniforms, o.color)
+		/*if (o !== player && o.vel) {
+			var om = o.matrix, ov = o.vel
+			flyTo(om, om, px, py, pz, pw)
+			translate(om, om, ov.x, ov.y, ov.z)
+		}*/
 	}
 }
 
-function updatePlayerMatrix() {
+function updatePose() {
 	var x = player.matrix,
 		p = player.pitch,
 		y = player.yaw,
@@ -454,6 +477,17 @@ function input() {
 		move(0, 0, -step)
 	}
 
+	// press r to automatically fly to next enemy
+	if (keysDown[82]) {
+		var x = dbg.matrix[12],
+			y = dbg.matrix[13],
+			z = dbg.matrix[14],
+			w = dbg.matrix[15]
+		flyTo(cm, cm, x, y, z, w)
+		translate(cm, cm, 0, 0, -step)
+		invert(vm, cm)
+	}
+
 	step = .01
 	player.pitch = player.yaw = player.roll = 0
 
@@ -469,7 +503,7 @@ function input() {
 		turn(-step, 1, 0, 0)
 	}
 
-	updatePlayerMatrix()
+	updatePose()
 }
 
 function run() {
@@ -601,7 +635,6 @@ function linkProgram(vs, fs) {
 	if ((p = gl.createProgram())) {
 		gl.attachShader(p, vs)
 		gl.attachShader(p, fs)
-
 		gl.linkProgram(p)
 
 		if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
@@ -780,6 +813,7 @@ function createGround() {
 	return model
 }
 
+var dbg
 function createObjects() {
 	var ground = createGround(),
 		plane = createPlane(),
@@ -794,18 +828,31 @@ function createObjects() {
 		matrix: new FA(m),
 		color: colorGreen})
 
-	for (var i = 100; i--;) {
-		translate(m, im, 0, 0, -10 * (i + 1))
+	/*for (var i = 100; i--;) {
+		var x = M.random() * 20 - 10,
+			y = M.random() * 20 - 10
+		if (x < 0) { x -= 5 } else { x += 5 }
+		if (y < 0) { y -= 5 } else { y += 5 }
+		translate(m, im, x, y, (i + 1) * -10)
+		rotate(m, m, M.random() * M.TAU, M.random(), M.random(), M.random())
 		objects.push({
 			model: cube,
 			matrix: new FA(m),
-			color: i % 2 > 0 ? colorWhite : colorRed})
-	}
+			color: i % 2 > 0 ? colorWhite : colorRed,
+			vel: {x: 0, y: 0, z: -.05},
+		})
+	}*/
+translate(m, im, 5, 5, -20)
+objects.push((dbg = {
+	model: cube,
+	matrix: new FA(m),
+	color: colorRed
+}))
 
 	objects.push((player = {
 		model: tri,
 		matrix: new FA(m),
-		color: colorBlue}))
+		color: colorRed}))
 
 	objectsLength = objects.length
 }
