@@ -869,13 +869,13 @@ function createObjects() {
 		cube = createCube()
 
 	translate(m, im, 0, -50, 0)
-	scale(m, m, 10, 1, 10)
+	scale(m, m, 15, 1, 15)
 	objects.push({
 		model: ground,
 		matrix: new FA(m),
 		color: colorGreen})
 
-	for (var i = 100; i--;) {
+	for (var i = 10; i--;) {
 		var x = M.random() * 20 - 10,
 			y = M.random() * 20 - 10
 		if (x < 0) { x -= 5 } else { x += 5 }
@@ -886,7 +886,7 @@ function createObjects() {
 			model: cube,
 			matrix: new FA(m),
 			color: i % 2 > 0 ? colorWhite : colorRed,
-			vel: {x: 0, y: 0, z: -.3},
+			vel: {x: 0, y: 0, z: -.1 - M.random()},
 		})
 	}
 
