@@ -806,9 +806,60 @@ function createPlane() {
 }
 
 function createGround() {
-	var model = {numberOfVertices: 0}
+	var vertices = [],
+		indicies = [],
+		size = 100,
+		radius = size * .5
 
-	return model
+	for (var y = -1, z = -radius; z < radius; ++z) {
+		for (var x = -radius; x < radius; ++x) {
+			vertices.push(x + (M.random() - .5) * .5)
+			vertices.push(y + (M.random() - .5) * 10)
+			vertices.push(z + (M.random() - .5) * .5)
+		}
+	}
+
+	/*for (var i = 0, z = -radius, ze = radius - 1; z < ze; ++z) {
+		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
+			// clockwise order
+			indicies.push(i)
+			indicies.push(i + 1)
+			indicies.push(i + size)
+
+			indicies.push(i + 1)
+			indicies.push(i + size + 1)
+			indicies.push(i + size)
+			++i
+		}
+		++i
+	}
+
+	return createIndexedModel(vertices, indicies)*/
+
+	// I want to have that 90's look and hard, sharp edges and the
+	// only way to achieve that in WebGL is not to reuse vertices
+	// so they don't share a normal
+	var v = []
+	for (var i = 0, z = -radius,
+			idc = [0, 1, size, 1, size + 1, size],
+			ze = radius - 1; z < ze; ++z) {
+		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
+			for (var j = 0; j < 6; ++j) {
+				var offset = (idc[j] + i) * 3
+				v.push(vertices[offset])
+				v.push(vertices[offset + 1])
+				v.push(vertices[offset + 2])
+			}
+			++i
+		}
+		++i
+	}
+
+	for (var i = 0, l = v.length / 3; i < l; ++i) {
+		indicies.push(i)
+	}
+
+	return createIndexedModel(v, indicies)
 }
 
 function createObjects() {
@@ -818,10 +869,9 @@ function createObjects() {
 		cube = createCube()
 
 	translate(m, im, 0, -50, 0)
-	rotate(m, m, M.PI2, 1, 0, 0)
-	scale(m, m, far, far, 1)
+	scale(m, m, 10, 1, 10)
 	objects.push({
-		model: plane,
+		model: ground,
 		matrix: new FA(m),
 		color: colorGreen})
 
