@@ -97,6 +97,10 @@ var M = Math,
 	models,
 	objectsLength = 0,
 	objects = [],
+	bulletsStart,
+	bulletsLength,
+	debrisStart,
+	debrisLength,
 	player,
 	width,
 	height,
@@ -110,7 +114,8 @@ var M = Math,
 	colorWhite = [1, 1, 1, 1],
 	colorRed = [1, 0, 0, 1],
 	colorGreen = [0, 1, 0, 1],
-	colorBlue = [0, 0, 1, 1]
+	colorBlue = [0, 0, 1, 1],
+	colorYellow = [1, 1, 0, 1]
 
 M.PI2 = M.PI2 || M.PI / 2
 M.TAU = M.TAU || M.PI * 2
@@ -342,6 +347,17 @@ function bindModel(attribs, model) {
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
 }
 
+function crash() {
+	var p = player.matrix
+	for (var i = objectsLength; i--;) {
+		var o = objects[i]
+		if (o !== player && sqDist(o.matrix, p) < 2) {
+			return true
+		}
+	}
+	return false
+}
+
 function flyTo(out, view, x, y, z, w) {
 	invert(m, view)
 	var vx = m[0] * x + m[4] * y + m[8] * z + m[12] * w,
@@ -355,15 +371,45 @@ function flyTo(out, view, x, y, z, w) {
 	return pitch
 }
 
+function fire(from) {
+	for (var i = bulletsLength + bulletsStart; i-- > bulletsStart;) {
+		var o = objects[i]
+		if (!o.show) {
+			translate(o.matrix, from.matrix, 0, 0, -1.5)
+			o.vel.x = 0
+			o.vel.y = 0
+			o.vel.z = -1
+			o.show = true
+			o.hideAt = now + 2000
+			return
+		}
+	}
+}
+
+function sqDist(a, b) {
+	var dx = a[12] - b[12],
+		dy = a[13] - b[13],
+		dz = a[14] - b[14]
+	return dx*dx + dy*dy + dz*dz
+}
+
+function dist(a, b) {
+	return M.sqrt(sqDist(a, b))
+}
+
 function plot(o, p, px, py, pz, pw) {
 	var om = o.matrix,
-		ov = o.vel,
-		pitch = flyTo(om, om, px, py, pz, pw)
-	//if (sqDist(om, p) < ? && pitch < ?) { // fire }
+		v = o.vel
+	if (o.attack && player.show) {
+		var pitch = flyTo(om, om, px, py, pz, pw)
+		if (sqDist(om, p) < 10000 && pitch < 1) {
+			fire(o)
+		}
+	}
 	translate(om, om,
-		ov.x * factor,
-		ov.y * factor,
-		ov.z * factor)
+		v.x * factor,
+		v.y * factor,
+		v.z * factor)
 }
 
 function draw() {
@@ -394,7 +440,10 @@ function draw() {
 			bindModel(attribs, model)
 		}
 		drawModel(o.matrix, model, uniforms, o.color)
-		if (o !== player && o.vel) {
+		var h = o.hideAt
+		if (h > 0 && h < now) {
+			o.show = false
+		} else if (o !== player && o.vel) {
 			// do this here for the next frame to not have
 			// to go through all objects again in that frame
 			plot(o, p, px, py, pz, pw)
@@ -426,71 +475,32 @@ function updatePose() {
 	}
 }
 
-function sqDist(a, b) {
-	var dx = a[12] - b[12],
-		dy = a[13] - b[13],
-		dz = a[14] - b[14]
-	return dx*dx + dy*dy + dz*dz
-}
-
-function dist(a, b) {
-	return M.sqrt(sqDist(a, b))
-}
-
-function crash() {
-	var p = player.matrix
-	for (var i = objectsLength; i--;) {
-		var o = objects[i]
-		if (o !== player && sqDist(o.matrix, p) < 2) {
-			return true
-		}
-	}
-	return false
-}
-
 function turn(rad, x, y, z) {
-	copy(sm, vm)
 	rotate(m, im, rad, x, y, z)
 	multiply(vm, m, vm)
-	if (crash()) {
-		copy(vm, sm)
-		return
-	}
-	invert(cm, vm)
 	var mag = -20
 	if (x !== 0) { player.pitch = rad * mag }
 	if (y !== 0) { player.yaw = rad * mag }
 	if (z !== 0) { player.roll = rad * mag }
 }
 
-function move(x, y, z) {
-	copy(sm, vm)
-	translate(m, im, x, y, z)
-	multiply(vm, m, vm)
-	if (crash()) {
-		copy(vm, sm)
+function input() {
+	if (!player.show) {
 		return
 	}
-	invert(cm, vm)
-}
 
-function input() {
-	var step = .3 * factor
+	var step = .1 * factor
 
 	if (keysDown[87]) {
-		move(0, 0, step)
+		player.speed = M.min(player.speed + step, .5)
 	} else if (keysDown[83]) {
-		move(0, 0, -step)
+		player.speed = M.max(player.speed - step, .1)
 	}
 
-	step = .01 * factor
+	translate(m, im, 0, 0, player.speed)
+	multiply(vm, m, vm)
 
-	if (keysDown[65]) {
-		move(step, 0, 0)
-	} else if (keysDown[68]) {
-		move(-step, 0, 0)
-	}
-
+	step = (.03 - (.02 / .4 * (player.speed - .1))) * factor
 	player.pitch = player.yaw = player.roll = 0
 
 	if (keysDown[37]) {
@@ -505,7 +515,17 @@ function input() {
 		turn(-step, 1, 0, 0)
 	}
 
+	if (keysDown[32] && player.reloading < now) {
+		player.reloading = now + 100
+		fire(player)
+	}
+
+	invert(cm, vm)
 	updatePose()
+
+	if (player.matrix[13] < 5) {
+		player.show = false
+	}
 }
 
 function run() {
@@ -705,6 +725,26 @@ function calculateNormals(vertices, indicies) {
 }
 
 function createModel(vertices, indicies) {
+	/*/ I want to have that 90's look with hard sharp seams and the
+	// only way to get that in WebGL is not to reuse vertices so they
+	// don't share a normal
+	for (var l = indicies.length, e = vertices.length / 3, i = l; i--;) {
+		var n = indicies[i],
+			vi = n * 3,
+			x = vertices[vi],
+			y = vertices[vi + 1],
+			z = vertices[vi + 2]
+
+		for (var j = l; j--;) {
+			if (i != j && n == indicies[j]) {
+				vertices.push(x)
+				vertices.push(y)
+				vertices.push(z)
+				indicies[j] = e++
+			}
+		}
+	}*/
+
 	var model = {numberOfVertices: indicies.length}
 
 	model.vertices = gl.createBuffer()
@@ -746,26 +786,19 @@ function createPlane() {
 		2, 3, 1])
 }
 
-function createPyramid() {
-/*
-0 = links oben
-1 = links unten
-2 = rechts oben
-3 = rechts unten
-4 = spitze
-*/
+function createBullet() {
 	return createModel([
-		-1, 1, 0,
-		-1, -1, 0,
-		1, 1, 0,
-		1, -1, 0,
-		0, 0, 1],[
-		0, 2, 1,
-		2, 3, 1,
+		0, .05, 0,
+		.05, 0, 0,
+		0, -.05, 0,
+		-.05, 0, 0,
+		0, 0, .7],[
+		0, 1, 2,
+		2, 3, 0,
 		0, 4, 1,
-		2, 4, 0,
-		3, 4, 2,
-		1, 4, 3])
+		1, 4, 2,
+		2, 4, 3,
+		3, 4, 0])
 }
 
 function createJet() {
@@ -983,8 +1016,7 @@ function createJet() {
 function createGround() {
 	var vertices = [],
 		indicies = [],
-		size = 100,
-		radius = size * .5
+		radius = 50
 
 	for (var y = 0, z = -radius; z < radius; ++z) {
 		for (var x = -radius; x < radius; ++x) {
@@ -994,11 +1026,29 @@ function createGround() {
 		}
 	}
 
+	/*for (var i = 0, size = radius * 2,
+			z = -radius, ze = radius - 1; z < ze; ++z) {
+		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
+			// clockwise order
+			indicies.push(i)
+			indicies.push(i + 1)
+			indicies.push(i + size)
+
+			indicies.push(i + 1)
+			indicies.push(i + size + 1)
+			indicies.push(i + size)
+			++i
+		}
+		++i
+	}
+
+	return createModel(vertices, indicies)*/
+
 	// I want to have that 90's look with hard sharp seams and the
 	// only way to get that in WebGL is not to reuse vertices so they
 	// don't share a normal
 	var v = []
-	for (var i = 0, z = -radius,
+	for (var i = 0, size = radius * 2, z = -radius,
 			order = [0, 1, size, 1, size + 1, size],
 			ze = radius - 1; z < ze; ++z) {
 		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
@@ -1023,7 +1073,7 @@ function createGround() {
 function createObjects() {
 	var ground = createGround(),
 		jet = createJet(),
-		pyramid = createPyramid(),
+		bullet = createBullet(),
 		plane = createPlane(),
 		tri = createTriangle(),
 		offsetHeight = 100
@@ -1044,10 +1094,43 @@ function createObjects() {
 		rotate(m, m, M.random() * M.TAU, M.random(), M.random(), M.random())
 		objects.push({
 			show: true,
+			attack: true,
 			model: jet,
 			matrix: new FA(m),
 			color: colorRed,
 			vel: {x: 0, y: 0, z: -.1 - M.random()},
+		})
+	}
+
+	bulletsStart = objects.length
+	bulletsLength = 500
+	rotate(m, im, M.PI2, 1, 0, 0)
+	scale(m, m, .1, .1, .2)
+	for (var i = bulletsLength; i--;) {
+		objects.push({
+			show: false,
+			model: bullet,
+			matrix: new FA(m),
+			color: colorRed,
+			vel: {}
+		})
+	}
+
+	debrisStart = objects.length
+	debrisLength = 100
+	for (var i = debrisLength; i--;) {
+		rotate(m, im, M.random() * M.TAU, M.random(), M.random(), M.random())
+		var s = .2 + M.random() * .5
+		scale(m, im, s, s, s)
+		objects.push({
+			show: false,
+			model: tri,
+			matrix: new FA(m),
+			color: colorRed,
+			vel: {
+				x: M.random() - .5,
+				y: M.random() - .5,
+				z: M.random() - .5},
 		})
 	}
 
@@ -1057,9 +1140,11 @@ function createObjects() {
 		model: jet,
 		matrix: new FA(m),
 		color: colorWhite,
+		speed: .3,
 		pitchValue: 0,
 		yawValue: 0,
-		rollValue: 0}))
+		rollValue: 0,
+		reloading: 0}))
 
 	objectsLength = objects.length
 }
