@@ -65,7 +65,7 @@ varying mediump float z;
 void main() {
 	float f = z / far;
 	gl_FragColor =
-		(1.0 - f) * color * max(.3, intensity) * brightness +
+		(1.0 - f) * color * (.3 + intensity * .7) * brightness +
 		f * sky;
 }
 
@@ -90,7 +90,7 @@ var M = Math,
 	sm = new FA(16),
 	m = new FA(16),
 	far = 500,
-	skyColor = [.2, .5, .8, 1],
+	sky = [.2, .5, .8, 1],
 	light = [.5, .5, 1],
 	brightness = 1,
 	program,
@@ -370,7 +370,7 @@ function draw() {
 		attribs = program.attribs
 
 	gl.uniform3fv(uniforms.light, light)
-	gl.uniform4fv(uniforms.sky, skyColor)
+	gl.uniform4fv(uniforms.sky, sky)
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
@@ -811,7 +811,7 @@ function createGround() {
 		size = 100,
 		radius = size * .5
 
-	for (var y = -1, z = -radius; z < radius; ++z) {
+	for (var y = 0, z = -radius; z < radius; ++z) {
 		for (var x = -radius; x < radius; ++x) {
 			vertices.push(x + (M.random() - .5) * .5)
 			vertices.push(y + (M.random() - .5) * 10)
@@ -866,10 +866,10 @@ function createObjects() {
 	var ground = createGround(),
 		plane = createPlane(),
 		tri = createTriangle(),
-		cube = createCube()
+		cube = createCube(),
+		worldsEnd = far * 1000
 
-	translate(m, im, 0, -50, 0)
-	scale(m, m, 15, 1, 15)
+	scale(m, im, 15, 1, 15)
 	objects.push({
 		model: ground,
 		matrix: new FA(m),
@@ -935,8 +935,9 @@ function init() {
 		'far'])
 
 	gl.enable(gl.DEPTH_TEST)
-	gl.clearColor(skyColor[0], skyColor[1], skyColor[2], skyColor[3])
+	gl.clearColor(sky[0], sky[1], sky[2], sky[3])
 
+	translate(vm, vm, 0, -50, 0)
 	W.onresize = resize
 	resize()
 
