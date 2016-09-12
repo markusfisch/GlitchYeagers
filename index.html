@@ -89,7 +89,7 @@ var M = Math,
 	cm = new FA(16),
 	sm = new FA(16),
 	m = new FA(16),
-	far = 500,
+	far = 1000,
 	sky = [.2, .5, .8, 1],
 	light = [.5, .5, 1],
 	brightness = 1,
@@ -115,7 +115,7 @@ var M = Math,
 M.PI2 = M.PI2 || M.PI / 2
 M.TAU = M.TAU || M.PI * 2
 
-// stolen from https://github.com/toji/gl-matrix
+// from https://github.com/toji/gl-matrix
 function invert(out, a) {
 	var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
 		a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
@@ -165,7 +165,7 @@ function invert(out, a) {
 	out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * d
 }
 
-// stolen from https://github.com/toji/gl-matrix
+// from https://github.com/toji/gl-matrix
 function multiply(out, a, b) {
 	var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
 		a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
@@ -198,7 +198,7 @@ function multiply(out, a, b) {
 	out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33
 }
 
-// stolen from https://github.com/toji/gl-matrix
+// from https://github.com/toji/gl-matrix
 function rotate(out, a, rad, x, y, z) {
 	var len = M.sqrt(x * x + y * y + z * z),
 		s, c, t,
@@ -254,7 +254,7 @@ function rotate(out, a, rad, x, y, z) {
 	}
 }
 
-// stolen from https://github.com/toji/gl-matrix
+// from https://github.com/toji/gl-matrix
 function scale(out, a, x, y, z) {
 	out[0] = a[0] * x
 	out[1] = a[1] * x
@@ -274,7 +274,7 @@ function scale(out, a, x, y, z) {
 	out[15] = a[15]
 }
 
-// stolen from https://github.com/toji/gl-matrix
+// from https://github.com/toji/gl-matrix
 function translate(out, a, x, y, z) {
 	if (a === out) {
 		out[12] = a[0] * x + a[4] * y + a[8] * z + a[12]
@@ -315,15 +315,11 @@ function drawModel(mm, model, uniforms, color) {
 	gl.uniformMatrix4fv(uniforms.mm, gl.FALSE, mm)
 	gl.uniform4fv(uniforms.color, color)
 
-	if (model.indicies) {
-		gl.drawElements(
-			gl.TRIANGLES,
-			model.numberOfVertices,
-			gl.UNSIGNED_SHORT,
-			0)
-	} else {
-		gl.drawArrays(gl.TRIANGLE_STRIP, 0, model.numberOfVertices)
-	}
+	gl.drawElements(
+		gl.TRIANGLES,
+		model.numberOfVertices,
+		gl.UNSIGNED_SHORT,
+		0)
 }
 
 function bindModel(attribs, model) {
@@ -343,10 +339,7 @@ function bindModel(attribs, model) {
 		gl.FALSE,
 		0,
 		0)
-
-	if (model.indicies) {
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
-	}
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
 }
 
 function flyTo(out, view, x, y, z, w) {
@@ -362,6 +355,17 @@ function flyTo(out, view, x, y, z, w) {
 	return pitch
 }
 
+function plot(o, p, px, py, pz, pw) {
+	var om = o.matrix,
+		ov = o.vel,
+		pitch = flyTo(om, om, px, py, pz, pw)
+	//if (sqDist(om, p) < ? && pitch < ?) { // fire }
+	translate(om, om,
+		ov.x * factor,
+		ov.y * factor,
+		ov.z * factor)
+}
+
 function draw() {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
@@ -374,34 +378,32 @@ function draw() {
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
-	var mx = player.matrix,
-		px = mx[12],
-		py = mx[13],
-		pz = mx[14],
-		pw = mx[15]
+	var p = player.matrix,
+		px = p[12],
+		py = p[13],
+		pz = p[14],
+		pw = p[15]
 
 	for (var model, i = objectsLength; i--;) {
 		var o = objects[i]
+		if (!o.show) {
+			continue
+		}
 		if (model != o.model) {
 			model = o.model
 			bindModel(attribs, model)
 		}
 		drawModel(o.matrix, model, uniforms, o.color)
 		if (o !== player && o.vel) {
-			var om = o.matrix,
-				ov = o.vel,
-				pitch = flyTo(om, om, px, py, pz, pw)
-			//if (sqDist(om, mx) < ? && pitch < ?) { // fire }
-			translate(om, om,
-				ov.x * factor,
-				ov.y * factor,
-				ov.z * factor)
+			// do this here for the next frame to not have
+			// to go through all objects again in that frame
+			plot(o, p, px, py, pz, pw)
 		}
 	}
 }
 
 function updatePose() {
-	var mx = player.matrix,
+	var p = player.matrix,
 		pv = player.pitchValue,
 		pd = player.pitch - pv,
 		yv = player.yawValue,
@@ -409,19 +411,19 @@ function updatePose() {
 		rv = player.rollValue,
 		rd = player.roll - rv
 
-	translate(mx, cm, 0, 0, -4)
+	translate(p, cm, 0, 0, -4)
 	if (M.abs(rd) > .0001) {
 		player.rollValue += rd * .1 * factor
-		rotate(mx, mx, player.rollValue, 0, 0, 1)
+		rotate(p, p, player.rollValue, 0, 0, 1)
 	}
 	if (M.abs(yd) > .0001) {
 		player.yawValue += vd * .1 * factor
-		rotate(mx, mx, player.yawValue, 0, 1, 0)
+		rotate(p, p, player.yawValue, 0, 1, 0)
 	}
 	if (M.abs(pd) > .0001) {
 		player.pitchValue += pd * .1 * factor
+		rotate(p, p, player.pitchValue, 1, 0, 0)
 	}
-	rotate(mx, mx, M.PI * -.47 + player.pitchValue, 1, 0, 0)
 }
 
 function sqDist(a, b) {
@@ -436,9 +438,10 @@ function dist(a, b) {
 }
 
 function crash() {
+	var p = player.matrix
 	for (var i = objectsLength; i--;) {
 		var o = objects[i]
-		if (o !== player && sqDist(o.matrix, player.matrix) < 2) {
+		if (o !== player && sqDist(o.matrix, p) < 2) {
 			return true
 		}
 	}
@@ -474,12 +477,6 @@ function move(x, y, z) {
 function input() {
 	var step = .3 * factor
 
-	if (keysDown[65]) {
-		move(step, 0, 0)
-	} else if (keysDown[68]) {
-		move(-step, 0, 0)
-	}
-
 	if (keysDown[87]) {
 		move(0, 0, step)
 	} else if (keysDown[83]) {
@@ -487,6 +484,13 @@ function input() {
 	}
 
 	step = .01 * factor
+
+	if (keysDown[65]) {
+		move(step, 0, 0)
+	} else if (keysDown[68]) {
+		move(-step, 0, 0)
+	}
+
 	player.pitch = player.yaw = player.roll = 0
 
 	if (keysDown[37]) {
@@ -700,8 +704,8 @@ function calculateNormals(vertices, indicies) {
 	return normals
 }
 
-function createModel(vertices, normals) {
-	var model = {numberOfVertices: vertices.length / 3}
+function createModel(vertices, indicies) {
+	var model = {numberOfVertices: indicies.length}
 
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
@@ -712,15 +716,8 @@ function createModel(vertices, normals) {
 	model.normals = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
 	gl.bufferData(gl.ARRAY_BUFFER,
-		new FA(normals),
+		new FA(calculateNormals(vertices, indicies)),
 		gl.STATIC_DRAW)
-
-	return model
-}
-
-function createIndexedModel(vertices, indicies) {
-	var model = createModel(vertices, calculateNormals(vertices, indicies))
-	model.numberOfVertices = indicies.length
 
 	model.indicies = gl.createBuffer()
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
@@ -731,66 +728,12 @@ function createIndexedModel(vertices, indicies) {
 	return model
 }
 
-function createCube() {
-	return createIndexedModel([
-		// front
-		-1, -1, 1,
-		1, -1, 1,
-		-1, 1, 1,
-		1, 1, 1,
-		// right
-		1, -1, 1,
-		1, -1, -1,
-		1, 1, 1,
-		1, 1, -1,
-		// back
-		1, -1, -1,
-		-1, -1, -1,
-		1, 1, -1,
-		-1, 1, -1,
-		// left
-		-1, -1, -1,
-		-1, -1, 1,
-		-1, 1, -1,
-		-1, 1, 1,
-		// bottom
-		-1, -1, -1,
-		1, -1, -1,
-		-1, -1, 1,
-		1, -1, 1,
-		// top
-		-1, 1, 1,
-		1, 1, 1,
-		-1, 1, -1,
-		1, 1, -1],[
-		// front
-		0, 1, 3,
-		0, 3, 2,
-		// right
-		4, 5, 7,
-		4, 7, 6,
-		// back
-		8, 9, 11,
-		8, 11, 10,
-		// left
-		12, 13, 15,
-		12, 15, 14,
-		// bottom
-		16, 17, 19,
-		16, 19, 18,
-		// top
-		20, 21, 23,
-		20, 23, 22])
-}
-
 function createTriangle() {
 	return createModel([
 		0, 1, 0,
 		-1, -1, 0,
 		1, -1, 0],[
-		0, 0, 1,
-		0, 0, 1,
-		0, 0, 1])
+		0, 1, 2])
 }
 
 function createPlane() {
@@ -799,10 +742,242 @@ function createPlane() {
 		-1, -1, 0,
 		1, 1, 0,
 		1, -1, 0],[
-		0, 0, 1,
-		0, 0, 1,
-		0, 0, 1,
-		0, 0, 1])
+		0, 2, 1,
+		2, 3, 1])
+}
+
+function createPyramid() {
+/*
+0 = links oben
+1 = links unten
+2 = rechts oben
+3 = rechts unten
+4 = spitze
+*/
+	return createModel([
+		-1, 1, 0,
+		-1, -1, 0,
+		1, 1, 0,
+		1, -1, 0,
+		0, 0, 1],[
+		0, 2, 1,
+		2, 3, 1,
+		0, 4, 1,
+		2, 4, 0,
+		3, 4, 2,
+		1, 4, 3])
+}
+
+function createJet() {
+	var vertices = [
+0.160713, -0.079566, 0.308486,
+0.160713, -0.035350, 0.308486,
+0.141574, -0.076788, -0.428799,
+0.141574, -0.038128, -0.428799,
+0.044415, -0.064979, -1.002609,
+0.044415, -0.054442, -1.002609,
+0.137133, -0.071677, 0.561634,
+0.137133, -0.043239, 0.561634,
+0.734764, -0.066573, 0.275790,
+0.734764, -0.048343, 0.275790,
+0.710531, -0.065557, 0.126651,
+0.710531, -0.049359, 0.126651,
+0.111385, -0.068833, 0.814783,
+0.111385, -0.046083, 0.814783,
+0.437837, -0.065587, 0.793524,
+0.437837, -0.049329, 0.793524,
+0.447748, -0.063962, 0.866828,
+0.447748, -0.050954, 0.866828,
+0.106927, 0.058309, 0.300239,
+0.094546, 0.014669, -0.585247,
+0.031598, -0.024898, -1.004654,
+0.091673, 0.053199, 0.546369,
+0.075369, 0.022490, 0.821219,
+0.093902, -0.173471, 0.293002,
+0.082845, -0.144193, -0.525104,
+0.027693, -0.115441, -0.981081,
+0.016848, 0.075065, 0.336714,
+0.080280, -0.157591, 0.554191,
+0.064380, -0.134058, 0.818955,
+0.030287, 0.072383, 0.652842,
+0.026017, 0.056262, 0.851769,
+0.003935, 0.431639, 0.625258,
+0.007840, 0.428957, 0.776011,
+0.005930, 0.412836, 0.826948,
+0.060856, 0.023202, -0.536708,
+0.068396, 0.049776, -0.193999,
+0.029756, 0.084168, -0.426948,
+0.032827, 0.085887, -0.321909,
+0.039074, -0.044549, -0.145049,
+0.039074, -0.037679, -0.145049,
+0.028199, -0.016973, -0.143105,
+0.024880, -0.064244, -0.143789,
+0.013297, -0.006776, -0.133881,
+0.044415, -0.064979, -1.002609,
+0.044415, -0.054442, -1.002609,
+0.031598, -0.024898, -1.004654,
+0.027693, -0.115441, -0.981081,
+0.026041, -0.064593, -0.249896,
+0.026041, -0.058611, -0.249896,
+0.018764, -0.041837, -0.240374,
+0.016547, -0.093244, -0.237674,
+0, -0.144193, -0.525104,
+0, 0.085887, -0.321909,
+0, -0.115441, -0.981081,
+0, -0.006776, -0.133881,
+0, -0.041837, -0.240374,
+0, 0.058309, 0.300239,
+0, -0.134058, 0.818955,
+0, 0.412836, 0.826948,
+0, 0.049776, -0.193999,
+0, 0.056262, 0.851769,
+0, 0.084168, -0.426948,
+0, -0.024898, -1.004654,
+0, -0.173471, 0.293002,
+0, 0.075065, 0.336714,
+0, 0.428957, 0.776011,
+0, -0.064244, -0.143789,
+0, 0.014669, -0.585247,
+0, 0.023202, -0.536708,
+0, -0.157591, 0.554191,
+0, 0.431639, 0.625258,
+0, -0.024898, -1.004654,
+0, -0.093244, -0.237674,
+0, -0.115441, -0.981081,
+], indicies = [
+0, 10, 8,
+20, 44, 45,
+6, 28, 27,
+5, 43, 44,
+4, 24, 25,
+1, 21, 7,
+1, 11, 3,
+7, 22, 13,
+10, 9, 8,
+0, 9, 1,
+7, 0, 1,
+10, 3, 11,
+5, 2, 4,
+7, 14, 6,
+15, 16, 14,
+12, 14, 16,
+12, 17, 13,
+13, 15, 7,
+67, 34, 19,
+22, 29, 30,
+3, 18, 1,
+5, 19, 3,
+24, 63, 51,
+51, 25, 24,
+0, 27, 23,
+2, 23, 24,
+73, 50, 46,
+29, 31, 32,
+22, 42, 40,
+21, 26, 29,
+56, 26, 18,
+65, 33, 32,
+31, 65, 32,
+64, 31, 26,
+29, 33, 30,
+19, 35, 18,
+68, 36, 34,
+34, 37, 35,
+12, 41, 28,
+13, 40, 39,
+13, 38, 12,
+60, 42, 30,
+40, 54, 66,
+4, 46, 43,
+25, 73, 46,
+46, 47, 43,
+45, 48, 49,
+43, 48, 44,
+52, 36, 61,
+67, 20, 71,
+63, 27, 69,
+60, 33, 58,
+56, 35, 59,
+59, 37, 52,
+57, 41, 66,
+69, 28, 57,
+62, 49, 55,
+0, 2, 10,
+20, 5, 44,
+6, 12, 28,
+5, 4, 43,
+4, 2, 24,
+1, 18, 21,
+1, 9, 11,
+7, 21, 22,
+10, 11, 9,
+0, 8, 9,
+7, 6, 0,
+10, 2, 3,
+5, 3, 2,
+7, 15, 14,
+15, 17, 16,
+12, 6, 14,
+12, 16, 17,
+13, 17, 15,
+67, 68, 34,
+22, 21, 29,
+3, 19, 18,
+5, 20, 19,
+24, 23, 63,
+51, 53, 25,
+0, 6, 27,
+2, 0, 23,
+73, 72, 50,
+29, 26, 31,
+22, 30, 42,
+21, 18, 26,
+56, 64, 26,
+65, 58, 33,
+31, 70, 65,
+64, 70, 31,
+29, 32, 33,
+19, 34, 35,
+68, 61, 36,
+34, 36, 37,
+12, 38, 41,
+13, 22, 40,
+13, 39, 38,
+60, 54, 42,
+41, 38, 39,
+39, 40, 66,
+42, 54, 40,
+66, 41, 39,
+4, 25, 46,
+25, 53, 73,
+46, 50, 47,
+45, 44, 48,
+43, 47, 48,
+52, 37, 36,
+67, 19, 20,
+63, 23, 27,
+60, 30, 33,
+56, 18, 35,
+59, 35, 37,
+57, 28, 41,
+69, 27, 28,
+62, 45, 49,
+]
+
+	var n = vertices.length / 3
+	for (var i = 0, l = vertices.length; i < l;) {
+		vertices.push(-vertices[i++])
+		vertices.push(vertices[i++])
+		vertices.push(vertices[i++])
+	}
+
+	for (var i = 0, l = indicies.length; i < l; i += 3) {
+		indicies.push(n + indicies[i + 2])
+		indicies.push(n + indicies[i + 1])
+		indicies.push(n + indicies[i])
+	}
+
+	return createModel(vertices, indicies)
 }
 
 function createGround() {
@@ -819,33 +994,16 @@ function createGround() {
 		}
 	}
 
-	/*for (var i = 0, z = -radius, ze = radius - 1; z < ze; ++z) {
-		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
-			// clockwise order
-			indicies.push(i)
-			indicies.push(i + 1)
-			indicies.push(i + size)
-
-			indicies.push(i + 1)
-			indicies.push(i + size + 1)
-			indicies.push(i + size)
-			++i
-		}
-		++i
-	}
-
-	return createIndexedModel(vertices, indicies)*/
-
-	// I want to have that 90's look and hard, sharp edges and the
-	// only way to achieve that in WebGL is not to reuse vertices
-	// so they don't share a normal
+	// I want to have that 90's look with hard sharp seams and the
+	// only way to get that in WebGL is not to reuse vertices so they
+	// don't share a normal
 	var v = []
 	for (var i = 0, z = -radius,
-			idc = [0, 1, size, 1, size + 1, size],
+			order = [0, 1, size, 1, size + 1, size],
 			ze = radius - 1; z < ze; ++z) {
 		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
 			for (var j = 0; j < 6; ++j) {
-				var offset = (idc[j] + i) * 3
+				var offset = (order[j] + i) * 3
 				v.push(vertices[offset])
 				v.push(vertices[offset + 1])
 				v.push(vertices[offset + 2])
@@ -859,41 +1017,46 @@ function createGround() {
 		indicies.push(i)
 	}
 
-	return createIndexedModel(v, indicies)
+	return createModel(v, indicies)
 }
 
 function createObjects() {
 	var ground = createGround(),
+		jet = createJet(),
+		pyramid = createPyramid(),
 		plane = createPlane(),
 		tri = createTriangle(),
-		cube = createCube(),
-		worldsEnd = far * 1000
+		offsetHeight = 100
 
-	scale(m, im, 15, 1, 15)
+	scale(m, im, 30, 1, 30)
 	objects.push({
+		show: true,
 		model: ground,
 		matrix: new FA(m),
 		color: colorGreen})
 
 	for (var i = 10; i--;) {
 		var x = M.random() * 20 - 10,
-			y = M.random() * 20 - 10
+			y = (M.random() * 10 - 5) + offsetHeight
 		if (x < 0) { x -= 5 } else { x += 5 }
 		if (y < 0) { y -= 5 } else { y += 5 }
 		translate(m, im, x, y, (i + 1) * -10)
 		rotate(m, m, M.random() * M.TAU, M.random(), M.random(), M.random())
 		objects.push({
-			model: cube,
+			show: true,
+			model: jet,
 			matrix: new FA(m),
-			color: i % 2 > 0 ? colorWhite : colorRed,
+			color: colorRed,
 			vel: {x: 0, y: 0, z: -.1 - M.random()},
 		})
 	}
 
+	translate(vm, vm, 0, -offsetHeight, 0)
 	objects.push((player = {
-		model: tri,
+		show: true,
+		model: jet,
 		matrix: new FA(m),
-		color: colorRed,
+		color: colorWhite,
 		pitchValue: 0,
 		yawValue: 0,
 		rollValue: 0}))
@@ -937,7 +1100,6 @@ function init() {
 	gl.enable(gl.DEPTH_TEST)
 	gl.clearColor(sky[0], sky[1], sky[2], sky[3])
 
-	translate(vm, vm, 0, -50, 0)
 	W.onresize = resize
 	resize()
 
