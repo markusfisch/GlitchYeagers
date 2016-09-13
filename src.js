@@ -1,77 +1,3 @@
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width"/>
-<title>js13k2016</title>
-<style>
-
-html, body {
-	margin: 0; padding: 0;
-	overflow: hidden;
-}
-
-canvas {
-	position: fixed;
-	width: 100%;
-	height: 100%;
-}
-
-</style>
-</head>
-<body>
-<canvas id="Canvas">Sorry, this browser cannot render this content.</canvas>
-<script id="VertexShader" type="x-shader/x-vertex">
-
-attribute vec3 vertex;
-attribute vec3 normal;
-
-uniform mat4 mvp;
-uniform mat4 mm;
-uniform vec3 light;
-
-varying mediump float intensity;
-varying mediump float z;
-
-void main() {
-	gl_Position = mvp * vec4(vertex, 1.0);
-	z = gl_Position.z;
-	intensity = max(.0, dot(
-		normalize(mat3(
-			// transpose matrix
-			mm[0][0], mm[0][1], mm[0][2],
-			mm[1][0], mm[1][1], mm[1][2],
-			mm[2][0], mm[2][1], mm[2][2]) * normal),
-		normalize(light)));
-}
-
-</script>
-<script id="FragmentShader" type="x-shader/x-fragment">
-
-#ifdef GL_FRAGMENT_PRECISION_HIGH
-precision highp float;
-#else
-precision mediump float;
-#endif
-
-uniform float brightness;
-uniform float far;
-uniform vec4 sky;
-uniform vec4 color;
-
-varying mediump float intensity;
-varying mediump float z;
-
-void main() {
-	float f = z / far;
-	gl_FragColor =
-		(1.0 - f) * color * (.3 + intensity * .7) * brightness +
-		f * sky;
-}
-
-</script>
-<script>
-
 'use strict'
 
 var M = Math,
@@ -101,6 +27,8 @@ var M = Math,
 	bulletsLength,
 	debrisStart,
 	debrisLength,
+	jetsStart,
+	jetsLength,
 	player,
 	width,
 	height,
@@ -115,7 +43,8 @@ var M = Math,
 	colorRed = [1, 0, 0, 1],
 	colorGreen = [0, 1, 0, 1],
 	colorBlue = [0, 0, 1, 1],
-	colorYellow = [1, 1, 0, 1]
+	colorYellow = [1, 1, 0, 1],
+	invertedSky = [.8, .5, .2, 1]
 
 M.PI2 = M.PI2 || M.PI / 2
 M.TAU = M.TAU || M.PI * 2
@@ -306,12 +235,6 @@ function translate(out, a, x, y, z) {
 	}
 }
 
-function copy(out, a) {
-	for (var i = 16; i--;) {
-		out[i] = a[i]
-	}
-}
-
 function drawModel(mm, model, uniforms, color) {
 	multiply(m, vm, mm)
 	multiply(m, pm, m)
@@ -368,7 +291,7 @@ function destruct(that) {
 				o.rot.z)
 			scale(om, om, s, s, s)
 			o.vel.x = (M.random() - .5) * .1
-			o.vel.y = (M.random() - .5) * .1
+			o.vel.y = (M.random() - .8) * .1
 			o.vel.z = M.random() * -.1
 			o.rot.a = M.random() * .001
 			o.show = true
@@ -378,6 +301,13 @@ function destruct(that) {
 			}
 		}
 	}
+}
+
+function sqDist(a, b) {
+	var dx = a[12] - b[12],
+		dy = a[13] - b[13],
+		dz = a[14] - b[14]
+	return dx*dx + dy*dy + dz*dz
 }
 
 function flyTo(out, view, x, y, z, w) {
@@ -400,7 +330,7 @@ function fire(from) {
 	for (var i = bulletsLength + bulletsStart; i-- > bulletsStart;) {
 		var o = objects[i]
 		if (!o.show) {
-			translate(o.matrix, from.matrix, 0, 0, -1.5)
+			translate(o.matrix, from.matrix, 0, 0, -3.5)
 			o.vel.x = 0
 			o.vel.y = 0
 			o.vel.z = -1.5
@@ -409,44 +339,6 @@ function fire(from) {
 			from.reloadingUntil = now + 100
 			return
 		}
-	}
-}
-
-function sqDist(a, b) {
-	var dx = a[12] - b[12],
-		dy = a[13] - b[13],
-		dz = a[14] - b[14]
-	return dx*dx + dy*dy + dz*dz
-}
-
-function dist(a, b) {
-	return M.sqrt(sqDist(a, b))
-}
-
-function collissions(o, i) {
-	if (!o.show || !o.vel) {
-		return
-	}
-	var om = o.matrix,
-		ox = om[12],
-		oy = om[13],
-		oz = om[13]
-	for (var j = objectsLength; j--;) {
-		if (i == j) {
-			continue
-		}
-		var oo = objects[j]
-		if (!oo.show || !oo.vel) {
-			continue
-		}
-		var oom = oo.matrix
-		if (M.abs(ox - oom[12]) > 2 ||
-			M.abs(oy - oom[13]) > 2 ||
-			M.abs(oz - oom[14]) > 2) {
-			continue
-		}
-		destruct(o)
-		destruct(oo)
 	}
 }
 
@@ -478,6 +370,23 @@ function plot(o, p, px, py, pz, pw) {
 }
 
 function draw() {
+	var p = player.matrix,
+		px = p[12],
+		py = p[13],
+		pz = p[14],
+		pw = p[15],
+		sc,
+		gc
+
+	if (py > 0) {
+		sc = sky
+		gc = colorGreen
+	} else {
+		sc = invertedSky
+		gc = colorRed
+	}
+
+	gl.clearColor(sc[0], sc[1], sc[2], sc[3])
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	gl.useProgram(program)
 
@@ -485,15 +394,9 @@ function draw() {
 		attribs = program.attribs
 
 	gl.uniform3fv(uniforms.light, light)
-	gl.uniform4fv(uniforms.sky, sky)
+	gl.uniform4fv(uniforms.sky, sc)
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
-
-	var p = player.matrix,
-		px = p[12],
-		py = p[13],
-		pz = p[14],
-		pw = p[15]
 
 	for (var model, i = objectsLength; i--;) {
 		var o = objects[i]
@@ -504,7 +407,7 @@ function draw() {
 			model = o.model
 			bindModel(attribs, model)
 		}
-		drawModel(o.matrix, model, uniforms, o.color)
+		drawModel(o.matrix, model, uniforms, i == 0 ? gc : o.color)
 		var h = o.hideAt
 		if (h > 0 && h < now) {
 			o.show = false
@@ -513,8 +416,34 @@ function draw() {
 			// to go through all objects again in that frame
 			plot(o, p, px, py, pz, pw)
 		}
-		if (o.vel || o === player) {
-			collissions(o, i)
+	}
+}
+
+function checkHits() {
+	for (var i = bulletsLength + bulletsStart; i-- > bulletsStart;) {
+		var bullet = objects[i]
+		if (!bullet.show) {
+			continue
+		}
+		var bm = bullet.matrix,
+			bx = bm[12],
+			by = bm[13],
+			bz = bm[14]
+		for (var j = jetsLength + jetsStart; j-- > jetsStart;) {
+			var jet = objects[j]
+			if (!jet.show) {
+				continue
+			}
+			var jm = jet.matrix,
+				jx = jm[12],
+				jy = jm[13],
+				jz = jm[14]
+			if (M.abs(bx - jx) < 1 &&
+				M.abs(by - jy) < 1 &&
+				M.abs(bz - jz) < 1) {
+				destruct(bullet)
+				destruct(jet)
+			}
 		}
 	}
 }
@@ -571,26 +500,46 @@ function input() {
 	step = (.025 - (.015 / .4 * (player.speed - .2))) * factor
 	player.pitch = player.yaw = player.roll = 0
 
-	if (keysDown[37]) {
-		turn(-step, 0, 0, 1)
-	} else if (keysDown[39]) {
-		turn(step, 0, 0, 1)
-	}
+	if (pointersLength > 0) {
+		if (pointersX[0] < -.5) {
+			turn(-step, 0, 0, 1)
+		} else if (pointersX[0] > .5) {
+			turn(step, 0, 0, 1)
+		}
 
-	if (keysDown[38]) {
-		turn(step, 1, 0, 0)
-	} else if (keysDown[40]) {
-		turn(-step, 1, 0, 0)
-	}
+		if (pointersY[0] < -.5) {
+			turn(-step, 1, 0, 0)
+		} else if (pointersY[0] > .5) {
+			turn(step / 4, 1, 0, 0)
+		}
+	} else {
+		if (keysDown[37]) {
+			turn(-step, 0, 0, 1)
+		} else if (keysDown[39]) {
+			turn(step, 0, 0, 1)
+		}
 
-	if (keysDown[32]) {
-		fire(player)
+		if (keysDown[38]) {
+			turn(step / 4, 1, 0, 0)
+		} else if (keysDown[40]) {
+			turn(-step, 1, 0, 0)
+		}
 	}
 
 	invert(cm, vm)
 	updatePose()
+	checkHits()
 
-	if (player.matrix[13] < 5) {
+	// And here's the glitch:
+	// Take a break by getting to the "other" side by flying
+	// through the ground when firing. But remember to keep
+	// on firing to stay alive on the other side.
+	var y = player.matrix[13]
+	if (keysDown[32] || pointersLength > 1) {
+		if (y > 5) {
+			fire(player)
+		}
+	} else if (y < 5) {
 		destruct(player)
 	}
 }
@@ -792,26 +741,6 @@ function calculateNormals(vertices, indicies) {
 }
 
 function createModel(vertices, indicies) {
-	/*/ I want to have that 90's look with hard sharp seams and the
-	// only way to get that in WebGL is not to reuse vertices so they
-	// don't share a normal
-	for (var l = indicies.length, e = vertices.length / 3, i = l; i--;) {
-		var n = indicies[i],
-			vi = n * 3,
-			x = vertices[vi],
-			y = vertices[vi + 1],
-			z = vertices[vi + 2]
-
-		for (var j = l; j--;) {
-			if (i != j && n == indicies[j]) {
-				vertices.push(x)
-				vertices.push(y)
-				vertices.push(z)
-				indicies[j] = e++
-			}
-		}
-	}*/
-
 	var model = {numberOfVertices: indicies.length}
 
 	model.vertices = gl.createBuffer()
@@ -870,199 +799,199 @@ function createBullet() {
 
 function createJet() {
 	var vertices = [
-0.160713, -0.079566, 0.308486,
-0.160713, -0.035350, 0.308486,
-0.141574, -0.076788, -0.428799,
-0.141574, -0.038128, -0.428799,
-0.044415, -0.064979, -1.002609,
-0.044415, -0.054442, -1.002609,
-0.137133, -0.071677, 0.561634,
-0.137133, -0.043239, 0.561634,
-0.734764, -0.066573, 0.275790,
-0.734764, -0.048343, 0.275790,
-0.710531, -0.065557, 0.126651,
-0.710531, -0.049359, 0.126651,
-0.111385, -0.068833, 0.814783,
-0.111385, -0.046083, 0.814783,
-0.437837, -0.065587, 0.793524,
-0.437837, -0.049329, 0.793524,
-0.447748, -0.063962, 0.866828,
-0.447748, -0.050954, 0.866828,
-0.106927, 0.058309, 0.300239,
-0.094546, 0.014669, -0.585247,
-0.031598, -0.024898, -1.004654,
-0.091673, 0.053199, 0.546369,
-0.075369, 0.022490, 0.821219,
-0.093902, -0.173471, 0.293002,
-0.082845, -0.144193, -0.525104,
-0.027693, -0.115441, -0.981081,
-0.016848, 0.075065, 0.336714,
-0.080280, -0.157591, 0.554191,
-0.064380, -0.134058, 0.818955,
-0.030287, 0.072383, 0.652842,
-0.026017, 0.056262, 0.851769,
-0.003935, 0.431639, 0.625258,
-0.007840, 0.428957, 0.776011,
-0.005930, 0.412836, 0.826948,
-0.060856, 0.023202, -0.536708,
-0.068396, 0.049776, -0.193999,
-0.029756, 0.084168, -0.426948,
-0.032827, 0.085887, -0.321909,
-0.039074, -0.044549, -0.145049,
-0.039074, -0.037679, -0.145049,
-0.028199, -0.016973, -0.143105,
-0.024880, -0.064244, -0.143789,
-0.013297, -0.006776, -0.133881,
-0.044415, -0.064979, -1.002609,
-0.044415, -0.054442, -1.002609,
-0.031598, -0.024898, -1.004654,
-0.027693, -0.115441, -0.981081,
-0.026041, -0.064593, -0.249896,
-0.026041, -0.058611, -0.249896,
-0.018764, -0.041837, -0.240374,
-0.016547, -0.093244, -0.237674,
-0, -0.144193, -0.525104,
-0, 0.085887, -0.321909,
-0, -0.115441, -0.981081,
-0, -0.006776, -0.133881,
-0, -0.041837, -0.240374,
-0, 0.058309, 0.300239,
-0, -0.134058, 0.818955,
-0, 0.412836, 0.826948,
-0, 0.049776, -0.193999,
-0, 0.056262, 0.851769,
-0, 0.084168, -0.426948,
-0, -0.024898, -1.004654,
-0, -0.173471, 0.293002,
-0, 0.075065, 0.336714,
-0, 0.428957, 0.776011,
-0, -0.064244, -0.143789,
-0, 0.014669, -0.585247,
-0, 0.023202, -0.536708,
-0, -0.157591, 0.554191,
-0, 0.431639, 0.625258,
-0, -0.024898, -1.004654,
-0, -0.093244, -0.237674,
-0, -0.115441, -0.981081,
-], indicies = [
-0, 10, 8,
-20, 44, 45,
-6, 28, 27,
-5, 43, 44,
-4, 24, 25,
-1, 21, 7,
-1, 11, 3,
-7, 22, 13,
-10, 9, 8,
-0, 9, 1,
-7, 0, 1,
-10, 3, 11,
-5, 2, 4,
-7, 14, 6,
-15, 16, 14,
-12, 14, 16,
-12, 17, 13,
-13, 15, 7,
-67, 34, 19,
-22, 29, 30,
-3, 18, 1,
-5, 19, 3,
-24, 63, 51,
-51, 25, 24,
-0, 27, 23,
-2, 23, 24,
-73, 50, 46,
-29, 31, 32,
-22, 42, 40,
-21, 26, 29,
-56, 26, 18,
-65, 33, 32,
-31, 65, 32,
-64, 31, 26,
-29, 33, 30,
-19, 35, 18,
-68, 36, 34,
-34, 37, 35,
-12, 41, 28,
-13, 40, 39,
-13, 38, 12,
-60, 42, 30,
-40, 54, 66,
-4, 46, 43,
-25, 73, 46,
-46, 47, 43,
-45, 48, 49,
-43, 48, 44,
-52, 36, 61,
-67, 20, 71,
-63, 27, 69,
-60, 33, 58,
-56, 35, 59,
-59, 37, 52,
-57, 41, 66,
-69, 28, 57,
-62, 49, 55,
-0, 2, 10,
-20, 5, 44,
-6, 12, 28,
-5, 4, 43,
-4, 2, 24,
-1, 18, 21,
-1, 9, 11,
-7, 21, 22,
-10, 11, 9,
-0, 8, 9,
-7, 6, 0,
-10, 2, 3,
-5, 3, 2,
-7, 15, 14,
-15, 17, 16,
-12, 6, 14,
-12, 16, 17,
-13, 17, 15,
-67, 68, 34,
-22, 21, 29,
-3, 19, 18,
-5, 20, 19,
-24, 23, 63,
-51, 53, 25,
-0, 6, 27,
-2, 0, 23,
-73, 72, 50,
-29, 26, 31,
-22, 30, 42,
-21, 18, 26,
-56, 64, 26,
-65, 58, 33,
-31, 70, 65,
-64, 70, 31,
-29, 32, 33,
-19, 34, 35,
-68, 61, 36,
-34, 36, 37,
-12, 38, 41,
-13, 22, 40,
-13, 39, 38,
-60, 54, 42,
-41, 38, 39,
-39, 40, 66,
-42, 54, 40,
-66, 41, 39,
-4, 25, 46,
-25, 53, 73,
-46, 50, 47,
-45, 44, 48,
-43, 47, 48,
-52, 37, 36,
-67, 19, 20,
-63, 23, 27,
-60, 30, 33,
-56, 18, 35,
-59, 35, 37,
-57, 28, 41,
-69, 27, 28,
-62, 45, 49,
-]
+		0.160713, -0.079566, 0.308486,
+		0.160713, -0.035350, 0.308486,
+		0.141574, -0.076788, -0.428799,
+		0.141574, -0.038128, -0.428799,
+		0.044415, -0.064979, -1.002609,
+		0.044415, -0.054442, -1.002609,
+		0.137133, -0.071677, 0.561634,
+		0.137133, -0.043239, 0.561634,
+		0.734764, -0.066573, 0.275790,
+		0.734764, -0.048343, 0.275790,
+		0.710531, -0.065557, 0.126651,
+		0.710531, -0.049359, 0.126651,
+		0.111385, -0.068833, 0.814783,
+		0.111385, -0.046083, 0.814783,
+		0.437837, -0.065587, 0.793524,
+		0.437837, -0.049329, 0.793524,
+		0.447748, -0.063962, 0.866828,
+		0.447748, -0.050954, 0.866828,
+		0.106927, 0.058309, 0.300239,
+		0.094546, 0.014669, -0.585247,
+		0.031598, -0.024898, -1.004654,
+		0.091673, 0.053199, 0.546369,
+		0.075369, 0.022490, 0.821219,
+		0.093902, -0.173471, 0.293002,
+		0.082845, -0.144193, -0.525104,
+		0.027693, -0.115441, -0.981081,
+		0.016848, 0.075065, 0.336714,
+		0.080280, -0.157591, 0.554191,
+		0.064380, -0.134058, 0.818955,
+		0.030287, 0.072383, 0.652842,
+		0.026017, 0.056262, 0.851769,
+		0.003935, 0.431639, 0.625258,
+		0.007840, 0.428957, 0.776011,
+		0.005930, 0.412836, 0.826948,
+		0.060856, 0.023202, -0.536708,
+		0.068396, 0.049776, -0.193999,
+		0.029756, 0.084168, -0.426948,
+		0.032827, 0.085887, -0.321909,
+		0.039074, -0.044549, -0.145049,
+		0.039074, -0.037679, -0.145049,
+		0.028199, -0.016973, -0.143105,
+		0.024880, -0.064244, -0.143789,
+		0.013297, -0.006776, -0.133881,
+		0.044415, -0.064979, -1.002609,
+		0.044415, -0.054442, -1.002609,
+		0.031598, -0.024898, -1.004654,
+		0.027693, -0.115441, -0.981081,
+		0.026041, -0.064593, -0.249896,
+		0.026041, -0.058611, -0.249896,
+		0.018764, -0.041837, -0.240374,
+		0.016547, -0.093244, -0.237674,
+		0, -0.144193, -0.525104,
+		0, 0.085887, -0.321909,
+		0, -0.115441, -0.981081,
+		0, -0.006776, -0.133881,
+		0, -0.041837, -0.240374,
+		0, 0.058309, 0.300239,
+		0, -0.134058, 0.818955,
+		0, 0.412836, 0.826948,
+		0, 0.049776, -0.193999,
+		0, 0.056262, 0.851769,
+		0, 0.084168, -0.426948,
+		0, -0.024898, -1.004654,
+		0, -0.173471, 0.293002,
+		0, 0.075065, 0.336714,
+		0, 0.428957, 0.776011,
+		0, -0.064244, -0.143789,
+		0, 0.014669, -0.585247,
+		0, 0.023202, -0.536708,
+		0, -0.157591, 0.554191,
+		0, 0.431639, 0.625258,
+		0, -0.024898, -1.004654,
+		0, -0.093244, -0.237674,
+		0, -0.115441, -0.981081,
+	], indicies = [
+		0, 10, 8,
+		20, 44, 45,
+		6, 28, 27,
+		5, 43, 44,
+		4, 24, 25,
+		1, 21, 7,
+		1, 11, 3,
+		7, 22, 13,
+		10, 9, 8,
+		0, 9, 1,
+		7, 0, 1,
+		10, 3, 11,
+		5, 2, 4,
+		7, 14, 6,
+		15, 16, 14,
+		12, 14, 16,
+		12, 17, 13,
+		13, 15, 7,
+		67, 34, 19,
+		22, 29, 30,
+		3, 18, 1,
+		5, 19, 3,
+		24, 63, 51,
+		51, 25, 24,
+		0, 27, 23,
+		2, 23, 24,
+		73, 50, 46,
+		29, 31, 32,
+		22, 42, 40,
+		21, 26, 29,
+		56, 26, 18,
+		65, 33, 32,
+		31, 65, 32,
+		64, 31, 26,
+		29, 33, 30,
+		19, 35, 18,
+		68, 36, 34,
+		34, 37, 35,
+		12, 41, 28,
+		13, 40, 39,
+		13, 38, 12,
+		60, 42, 30,
+		40, 54, 66,
+		4, 46, 43,
+		25, 73, 46,
+		46, 47, 43,
+		45, 48, 49,
+		43, 48, 44,
+		52, 36, 61,
+		67, 20, 71,
+		63, 27, 69,
+		60, 33, 58,
+		56, 35, 59,
+		59, 37, 52,
+		57, 41, 66,
+		69, 28, 57,
+		62, 49, 55,
+		0, 2, 10,
+		20, 5, 44,
+		6, 12, 28,
+		5, 4, 43,
+		4, 2, 24,
+		1, 18, 21,
+		1, 9, 11,
+		7, 21, 22,
+		10, 11, 9,
+		0, 8, 9,
+		7, 6, 0,
+		10, 2, 3,
+		5, 3, 2,
+		7, 15, 14,
+		15, 17, 16,
+		12, 6, 14,
+		12, 16, 17,
+		13, 17, 15,
+		67, 68, 34,
+		22, 21, 29,
+		3, 19, 18,
+		5, 20, 19,
+		24, 23, 63,
+		51, 53, 25,
+		0, 6, 27,
+		2, 0, 23,
+		73, 72, 50,
+		29, 26, 31,
+		22, 30, 42,
+		21, 18, 26,
+		56, 64, 26,
+		65, 58, 33,
+		31, 70, 65,
+		64, 70, 31,
+		29, 32, 33,
+		19, 34, 35,
+		68, 61, 36,
+		34, 36, 37,
+		12, 38, 41,
+		13, 22, 40,
+		13, 39, 38,
+		60, 54, 42,
+		41, 38, 39,
+		39, 40, 66,
+		42, 54, 40,
+		66, 41, 39,
+		4, 25, 46,
+		25, 53, 73,
+		46, 50, 47,
+		45, 44, 48,
+		43, 47, 48,
+		52, 37, 36,
+		67, 19, 20,
+		63, 23, 27,
+		60, 30, 33,
+		56, 18, 35,
+		59, 35, 37,
+		57, 28, 41,
+		69, 27, 28,
+		62, 45, 49,
+	]
 
 	var n = vertices.length / 3
 	for (var i = 0, l = vertices.length; i < l;) {
@@ -1092,24 +1021,6 @@ function createGround() {
 			vertices.push(z + (M.random() - .5) * .5)
 		}
 	}
-
-	/*for (var i = 0, size = radius * 2,
-			z = -radius, ze = radius - 1; z < ze; ++z) {
-		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
-			// clockwise order
-			indicies.push(i)
-			indicies.push(i + 1)
-			indicies.push(i + size)
-
-			indicies.push(i + 1)
-			indicies.push(i + size + 1)
-			indicies.push(i + size)
-			++i
-		}
-		++i
-	}
-
-	return createModel(vertices, indicies)*/
 
 	// I want to have that 90's look with hard sharp seams and the
 	// only way to get that in WebGL is not to reuse vertices so they
@@ -1152,25 +1063,8 @@ function createObjects() {
 		matrix: new FA(m),
 		color: colorGreen})
 
-	for (var i = 10; i--;) {
-		var x = M.random() * 20 - 10,
-			y = (M.random() * 10 - 5) + offsetHeight
-		if (x < 0) { x -= 5 } else { x += 5 }
-		if (y < 0) { y -= 5 } else { y += 5 }
-		translate(m, im, x, y, (i + 1) * -10)
-		rotate(m, m, M.random() * M.TAU, M.random(), M.random(), M.random())
-		objects.push({
-			show: true,
-			attack: true,
-			model: jet,
-			matrix: new FA(m),
-			color: colorRed,
-			vel: {x: 0, y: 0, z: -.2 - M.random() * .2},
-		})
-	}
-
 	bulletsStart = objects.length
-	bulletsLength = 100
+	bulletsLength = 10
 	rotate(m, im, M.PI2, 1, 0, 0)
 	scale(m, m, .1, .1, .2)
 	for (var i = bulletsLength; i--;) {
@@ -1196,17 +1090,36 @@ function createObjects() {
 		})
 	}
 
+	jetsStart = objects.length
+	for (var i = 10; i--;) {
+		var x = M.random() * 20 - 10,
+			y = (M.random() * 10 - 5) + offsetHeight
+		if (x < 0) { x -= 5 } else { x += 5 }
+		if (y < 0) { y -= 5 } else { y += 5 }
+		translate(m, im, x, y, (i + 1) * -10)
+		rotate(m, m, M.random() * M.TAU, M.random(), M.random(), M.random())
+		objects.push({
+			show: true,
+			attack: true,
+			model: jet,
+			matrix: new FA(m),
+			color: colorRed,
+			vel: {x: 0, y: 0, z: -.2 - M.random() * .2},
+		})
+	}
+
 	translate(vm, vm, 0, -offsetHeight, 0)
 	objects.push((player = {
 		show: true,
 		model: jet,
 		matrix: new FA(m),
 		color: colorWhite,
-		speed: .3,
+		speed: .2,
 		pitchValue: 0,
 		yawValue: 0,
 		rollValue: 0,
 	}))
+	jetsLength = objects.length - jetsStart
 
 	objectsLength = objects.length
 }
@@ -1271,7 +1184,3 @@ function init() {
 }
 
 W.onload = init
-
-</script>
-</body>
-</html>
