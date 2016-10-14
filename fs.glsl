@@ -14,7 +14,8 @@ varying mediump float z;
 
 void main() {
 	float f = z / far;
-	gl_FragColor =
-		(1.0 - f) * color * (.3 + intensity * .7) * brightness +
-		f * sky;
+	gl_FragColor = vec4(
+		(1. - f) * color.rgb * (.3 + intensity * .7) * brightness +
+			f * sky.rgb,
+		1.);
 }
