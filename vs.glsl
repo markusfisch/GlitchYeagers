@@ -9,7 +9,7 @@ varying mediump float intensity;
 varying mediump float z;
 
 void main() {
-	gl_Position = mvp * vec4(vertex, 1.0);
+	gl_Position = mvp * vec4(vertex, 1.);
 	z = gl_Position.z;
 	intensity = max(.0, dot(
 		normalize(mat3(

@@ -20,9 +20,8 @@ var M = Math,
 	light = [.5, .5, 1],
 	brightness = 1,
 	program,
-	models,
-	objectsLength = 0,
-	objects = [],
+	entitiesLength = 0,
+	entities = [],
 	bulletsStart,
 	bulletsLength,
 	debrisStart,
@@ -275,27 +274,28 @@ function destruct(that) {
 		return
 	}
 	that.show = false
-	for (var pieces = 6, i = debrisLength + debrisStart; i-- > debrisStart;) {
-		var o = objects[i]
-		if (!o.show) {
+	for (var pieces = 6, i = debrisLength + debrisStart;
+			i-- > debrisStart;) {
+		var e = entities[i]
+		if (!e.show) {
 			var tm = that.matrix,
-				om = o.matrix,
+				em = e.matrix,
 				s = .1 + M.random() * .2
-			translate(om, im, tm[12], tm[13], tm[14])
-			o.rot.x = M.random()
-			o.rot.y = M.random()
-			o.rot.z = M.random()
-			rotate(om, om, M.random() * M.TAU,
-				o.rot.x,
-				o.rot.y,
-				o.rot.z)
-			scale(om, om, s, s, s)
-			o.vel.x = (M.random() - .5) * .1
-			o.vel.y = (M.random() - .8) * .1
-			o.vel.z = M.random() * -.1
-			o.rot.a = M.random() * .001
-			o.show = true
-			o.hideAt = now + 2000
+			translate(em, im, tm[12], tm[13], tm[14])
+			e.rot.x = M.random()
+			e.rot.y = M.random()
+			e.rot.z = M.random()
+			rotate(em, em, M.random() * M.TAU,
+				e.rot.x,
+				e.rot.y,
+				e.rot.z)
+			scale(em, em, s, s, s)
+			e.vel.x = (M.random() - .5) * .1
+			e.vel.y = (M.random() - .8) * .1
+			e.vel.z = M.random() * -.1
+			e.rot.a = M.random() * .001
+			e.show = true
+			e.hideAt = now + 2000
 			if (--pieces < 1) {
 				return
 			}
@@ -328,44 +328,47 @@ function fire(from) {
 		return
 	}
 	for (var i = bulletsLength + bulletsStart; i-- > bulletsStart;) {
-		var o = objects[i]
-		if (!o.show) {
-			translate(o.matrix, from.matrix, 0, 0, -3.5)
-			o.vel.x = 0
-			o.vel.y = 0
-			o.vel.z = -1.5
-			o.show = true
-			o.hideAt = now + 2000
+		var e = entities[i]
+		if (!e.show) {
+			translate(e.matrix, from.matrix, 0, 0, -3.5)
+			e.vel.x = 0
+			e.vel.y = 0
+			e.vel.z = -1.5
+			e.show = true
+			e.hideAt = now + 2000
 			from.reloadingUntil = now + 100
 			return
 		}
 	}
 }
 
-function plot(o, p, px, py, pz, pw) {
-	var om = o.matrix,
-		v = o.vel,
-		r = o.rot
-	if (o.attack && player.show) {
-		var y = om[13]
+function plot(e, p, px, py, pz, pw) {
+	var em = e.matrix,
+		v = e.vel,
+		r = e.rot
+
+	if (e.attack && player.show) {
+		var y = em[13]
 		if (y < 5) {
-			destruct(o)
+			destruct(e)
 			return
 		} else if (y < 20) {
-			flyTo(om, om, 0, 100, 0, 1)
+			flyTo(em, em, 0, 100, 0, 1)
 		} else {
-			var pitch = flyTo(om, om, px, py, pz, pw)
-			if (sqDist(om, p) < 10000 && pitch < .25) {
-				fire(o)
+			var pitch = flyTo(em, em, px, py, pz, pw)
+			if (sqDist(em, p) < 10000 && pitch < .25) {
+				fire(e)
 			}
 		}
 	}
-	translate(om, om,
+
+	translate(em, em,
 		v.x * factor,
 		v.y * factor,
 		v.z * factor)
+
 	if (r) {
-		rotate(om, om, r.a, r.x, r.y, r.z)
+		rotate(em, em, r.a, r.x, r.y, r.z)
 	}
 }
 
@@ -398,30 +401,30 @@ function draw() {
 	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
-	for (var model, i = objectsLength; i--;) {
-		var o = objects[i]
-		if (!o.show) {
+	for (var model, i = entitiesLength; i--;) {
+		var e = entities[i]
+		if (!e.show) {
 			continue
 		}
-		if (model != o.model) {
-			model = o.model
+		if (model != e.model) {
+			model = e.model
 			bindModel(attribs, model)
 		}
-		drawModel(o.matrix, model, uniforms, i == 0 ? gc : o.color)
-		var h = o.hideAt
+		drawModel(e.matrix, model, uniforms, i == 0 ? gc : e.color)
+		var h = e.hideAt
 		if (h > 0 && h < now) {
-			o.show = false
-		} else if (o !== player && o.vel) {
+			e.show = false
+		} else if (e !== player && e.vel) {
 			// do this here for the next frame to not have
-			// to go through all objects again in that frame
-			plot(o, p, px, py, pz, pw)
+			// to go through all entities again in that frame
+			plot(e, p, px, py, pz, pw)
 		}
 	}
 }
 
 function checkHits() {
 	for (var i = bulletsLength + bulletsStart; i-- > bulletsStart;) {
-		var bullet = objects[i]
+		var bullet = entities[i]
 		if (!bullet.show) {
 			continue
 		}
@@ -430,7 +433,7 @@ function checkHits() {
 			by = bm[13],
 			bz = bm[14]
 		for (var j = jetsLength + jetsStart; j-- > jetsStart;) {
-			var jet = objects[j]
+			var jet = entities[j]
 			if (!jet.show) {
 				continue
 			}
@@ -501,15 +504,18 @@ function input() {
 	player.pitch = player.yaw = player.roll = 0
 
 	if (pointersLength > 0) {
-		if (pointersX[0] < -.5) {
+		var px = pointersX[0],
+			py = pointersY[0]
+
+		if (px < -.5) {
 			turn(-step, 0, 0, 1)
-		} else if (pointersX[0] > .5) {
+		} else if (px > .5) {
 			turn(step, 0, 0, 1)
 		}
 
-		if (pointersY[0] < -.5) {
+		if (py < -.5) {
 			turn(-step, 1, 0, 0)
-		} else if (pointersY[0] > .5) {
+		} else if (py > .5) {
 			turn(step / 4, 1, 0, 0)
 		}
 	} else {
@@ -562,12 +568,9 @@ function setPointer(event, down) {
 			0
 	} else if (event.touches) {
 		var touches = event.touches
-
 		pointersLength = touches.length
-
 		for (var i = pointersLength; i--;) {
 			var t = touches[i]
-
 			pointersX[i] = t.pageX
 			pointersY[i] = t.pageY
 		}
@@ -1057,18 +1060,18 @@ function createObjects() {
 		offsetHeight = 100
 
 	scale(m, im, 30, 1, 30)
-	objects.push({
+	entities.push({
 		show: true,
 		model: ground,
 		matrix: new FA(m),
 		color: colorGreen})
 
-	bulletsStart = objects.length
+	bulletsStart = entities.length
 	bulletsLength = 10
 	rotate(m, im, M.PI2, 1, 0, 0)
 	scale(m, m, .1, .1, .2)
 	for (var i = bulletsLength; i--;) {
-		objects.push({
+		entities.push({
 			show: false,
 			model: bullet,
 			matrix: new FA(m),
@@ -1077,10 +1080,10 @@ function createObjects() {
 		})
 	}
 
-	debrisStart = objects.length
+	debrisStart = entities.length
 	debrisLength = 100
 	for (var i = debrisLength; i--;) {
-		objects.push({
+		entities.push({
 			show: false,
 			model: tri,
 			matrix: new FA(im),
@@ -1090,7 +1093,7 @@ function createObjects() {
 		})
 	}
 
-	jetsStart = objects.length
+	jetsStart = entities.length
 	for (var i = 10; i--;) {
 		var x = M.random() * 20 - 10,
 			y = (M.random() * 10 - 5) + offsetHeight
@@ -1098,7 +1101,7 @@ function createObjects() {
 		if (y < 0) { y -= 5 } else { y += 5 }
 		translate(m, im, x, y, (i + 1) * -10)
 		rotate(m, m, M.random() * M.TAU, M.random(), M.random(), M.random())
-		objects.push({
+		entities.push({
 			show: true,
 			attack: true,
 			model: jet,
@@ -1109,7 +1112,7 @@ function createObjects() {
 	}
 
 	translate(vm, vm, 0, -offsetHeight, 0)
-	objects.push((player = {
+	entities.push((player = {
 		show: true,
 		model: jet,
 		matrix: new FA(m),
@@ -1119,9 +1122,9 @@ function createObjects() {
 		yawValue: 0,
 		rollValue: 0,
 	}))
-	jetsLength = objects.length - jetsStart
+	jetsLength = entities.length - jetsStart
 
-	objectsLength = objects.length
+	entitiesLength = entities.length
 }
 
 function getContext() {
