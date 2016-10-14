@@ -1,11 +1,11 @@
-ARCHIVE = archive.zip
 BUILD = index.html
-
-$(ARCHIVE): $(BUILD)
-	zip $@ $(BUILD)
+ARCHIVE = archive.zip
 
 $(BUILD): src.js vs.glsl fs.glsl
 	bash index.html.sh > $(BUILD)
+
+$(ARCHIVE): $(BUILD)
+	zip $@ $^
 
 clean:
 	rm -f $(ARCHIVE) $(BUILD)
