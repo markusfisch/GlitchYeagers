@@ -563,9 +563,8 @@ function run() {
 
 function setPointer(event, down) {
 	if (!down) {
-		pointersLength = event.touches ?
-			event.touches.length :
-			0
+		pointersLength = event.touches ? event.touches.length : 0
+		return
 	} else if (event.touches) {
 		var touches = event.touches
 		pointersLength = touches.length
