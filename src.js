@@ -564,10 +564,10 @@ function run() {
 function setPointer(event, down) {
 	if (!down) {
 		pointersLength = event.touches ? event.touches.length : 0
-		return
 	} else if (event.touches) {
 		var touches = event.touches
 		pointersLength = touches.length
+
 		for (var i = pointersLength; i--;) {
 			var t = touches[i]
 			pointersX[i] = t.pageX
@@ -579,13 +579,15 @@ function setPointer(event, down) {
 		pointersY[0] = event.pageY
 	}
 
-	// map to WebGL coordinates
-	var xf = 2 / width,
-		yf = 2 / height
+	if (down) {
+		// map to WebGL coordinates
+		var xf = 2 / width,
+			yf = 2 / height
 
-	for (var i = pointersLength; i--;) {
-		pointersX[i] = pointersX[i] * xf - 1
-		pointersY[i] = -(pointersY[i] * yf - 1)
+		for (var i = pointersLength; i--;) {
+			pointersX[i] = pointersX[i] * xf - 1
+			pointersY[i] = -(pointersY[i] * yf - 1)
+		}
 	}
 
 	event.preventDefault()
