@@ -17,8 +17,8 @@ var M = Math,
 	mvp = new FA(im),
 	m = new FA(16),
 	far = 1000,
-	sky = [.2, .5, .8, 1],
-	light = [.5, .5, 1],
+	colorSky = [.2, .5, .8, 1],
+	lightDirection = [.5, .5, 1],
 	program,
 	entitiesLength = 0,
 	entities = [],
@@ -409,7 +409,7 @@ function draw() {
 		gc
 
 	if (py > 0) {
-		sc = sky
+		sc = colorSky
 		gc = colorGreen
 	} else {
 		sc = invertedSky
@@ -423,7 +423,7 @@ function draw() {
 	var uniforms = program.uniforms,
 		attribs = program.attribs
 
-	gl.uniform3fv(uniforms.light, light)
+	gl.uniform3fv(uniforms.light, lightDirection)
 	gl.uniform4fv(uniforms.sky, sc)
 	gl.uniform1f(uniforms.far, far)
 
@@ -1177,7 +1177,7 @@ function init() {
 		'far'])
 
 	gl.enable(gl.DEPTH_TEST)
-	gl.clearColor(sky[0], sky[1], sky[2], sky[3])
+	gl.clearColor(colorSky[0], colorSky[1], colorSky[2], colorSky[3])
 
 	W.onresize = resize
 	resize()
