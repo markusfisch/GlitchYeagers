@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width"/>
+<title>Glitch Yeagers</title>
+<style>
+html, body {
+	margin: 0; padding: 0;
+	overflow: hidden;
+}
+canvas {
+	position: fixed;
+	width: 100%;
+	height: 100%;
+}
+</style>
+</head>
+<body>
+<canvas id="Canvas">Sorry, this browser cannot render this content.</canvas>
+<div id="Text"></div>
+<script id="VertexShader" type="x-shader/x-vertex">
+attribute vec3 vertex;
+attribute vec3 normal;
+
+uniform mat4 mvp;
+uniform mat4 nm;
+uniform vec3 light;
+
+varying mediump float intensity;
+varying mediump float z;
+
+void main() {
+	gl_Position = mvp * vec4(vertex, 1.);
+	z = gl_Position.z;
+	intensity = max(0., dot(normalize(mat3(nm) * normal), light));
+}
+</script>
+<script id="FragmentShader" type="x-shader/x-fragment">
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+uniform float far;
+uniform vec4 sky;
+uniform vec4 color;
+
+varying mediump float intensity;
+varying mediump float z;
+
+void main() {
+	float f = z / far;
+	gl_FragColor = vec4(
+		(1. - f) * color.rgb * (.5 + intensity * .5) + f * sky.rgb,
+		1.0);
+}
+</script>
+<script src="src.js"></script>
+</body>
+</html>

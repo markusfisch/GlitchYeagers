@@ -12,13 +12,13 @@ var M = Math,
 		0, 0, 0, 1]),
 	pm,
 	vm = new FA(im),
-	cm = new FA(16),
-	sm = new FA(16),
+	nm = new FA(im),
+	cm = new FA(im),
+	mvp = new FA(im),
 	m = new FA(16),
 	far = 1000,
 	sky = [.2, .5, .8, 1],
 	light = [.5, .5, 1],
-	brightness = 1,
 	program,
 	entitiesLength = 0,
 	entities = [],
@@ -234,38 +234,65 @@ function translate(out, a, x, y, z) {
 	}
 }
 
-function drawModel(mm, model, uniforms, color) {
-	multiply(m, vm, mm)
-	multiply(m, pm, m)
+// from https://github.com/toji/gl-matrix
+function transpose(out, a) {
+	if (out === a) {
+		var a01 = a[1], a02 = a[2], a03 = a[3],
+			a12 = a[6], a13 = a[7], a23 = a[11]
 
-	gl.uniformMatrix4fv(uniforms.mvp, gl.FALSE, m)
-	gl.uniformMatrix4fv(uniforms.mm, gl.FALSE, mm)
+		out[1] = a[4]
+		out[2] = a[8]
+		out[3] = a[12]
+		out[4] = a01
+		out[6] = a[9]
+		out[7] = a[13]
+		out[8] = a02
+		out[9] = a12
+		out[11] = a[14]
+		out[12] = a03
+		out[13] = a13
+		out[14] = a23
+	} else {
+		out[0] = a[0]
+		out[1] = a[4]
+		out[2] = a[8]
+		out[3] = a[12]
+		out[4] = a[1]
+		out[5] = a[5]
+		out[6] = a[9]
+		out[7] = a[13]
+		out[8] = a[2]
+		out[9] = a[6]
+		out[10] = a[10]
+		out[11] = a[14]
+		out[12] = a[3]
+		out[13] = a[7]
+		out[14] = a[11]
+		out[15] = a[15]
+	}
+}
+
+function drawModel(mm, model, uniforms, color) {
+	multiply(mvp, vm, mm)
+	multiply(mvp, pm, mvp)
+
+	// we need to invert and transpose the model matrix so the
+	// normals are scaled correctly
+	invert(nm, mm)
+	transpose(nm, nm)
+
+	gl.uniformMatrix4fv(uniforms.mvp, gl.FALSE, mvp)
+	gl.uniformMatrix4fv(uniforms.nm, gl.FALSE, nm)
 	gl.uniform4fv(uniforms.color, color)
 
-	gl.drawElements(
-		gl.TRIANGLES,
-		model.numberOfVertices,
-		gl.UNSIGNED_SHORT,
-		0)
+	gl.drawElements(gl.TRIANGLES, model.count, gl.UNSIGNED_SHORT, 0)
 }
 
 function bindModel(attribs, model) {
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
-	gl.vertexAttribPointer(
-		attribs.vertex,
-		3,
-		gl.FLOAT,
-		gl.FALSE,
-		0,
-		0)
+	gl.vertexAttribPointer(attribs.vertex, 3, gl.FLOAT, gl.FALSE, 0, 0)
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.normals)
-	gl.vertexAttribPointer(
-		attribs.normal,
-		3,
-		gl.FLOAT,
-		gl.FALSE,
-		0,
-		0)
+	gl.vertexAttribPointer(attribs.normal, 3, gl.FLOAT, gl.FALSE, 0, 0)
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indicies)
 }
 
@@ -398,7 +425,6 @@ function draw() {
 
 	gl.uniform3fv(uniforms.light, light)
 	gl.uniform4fv(uniforms.sky, sc)
-	gl.uniform1f(uniforms.brightness, brightness)
 	gl.uniform1f(uniforms.far, far)
 
 	for (var model, i = entitiesLength; i--;) {
@@ -618,14 +644,7 @@ function keyDown(event) {
 	setKey(event, true)
 }
 
-function resize() {
-	width = gl.canvas.clientWidth
-	height = gl.canvas.clientHeight
-
-	gl.canvas.width = width
-	gl.canvas.height = height
-	gl.viewport(0, 0, width, height)
-
+function setProjectionMatrix() {
 	var aspect = width / height,
 		near = .1,
 		r = near - far,
@@ -636,7 +655,17 @@ function resize() {
 		0, f, 0, 0,
 		0, 0, (far + near) / r, -1,
 		0, 0, (2 * far * near) / r, 0])
+}
 
+function resize() {
+	width = gl.canvas.clientWidth
+	height = gl.canvas.clientHeight
+
+	gl.canvas.width = width
+	gl.canvas.height = height
+	gl.viewport(0, 0, width, height)
+
+	setProjectionMatrix()
 	invert(cm, vm)
 }
 
@@ -745,7 +774,7 @@ function calculateNormals(vertices, indicies) {
 }
 
 function createModel(vertices, indicies) {
-	var model = {numberOfVertices: indicies.length}
+	var model = {count: indicies.length}
 
 	model.vertices = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, model.vertices)
@@ -774,16 +803,6 @@ function createTriangle() {
 		-1, -1, 0,
 		1, -1, 0],[
 		0, 1, 2])
-}
-
-function createPlane() {
-	return createModel([
-		-1, 1, 0,
-		-1, -1, 0,
-		1, 1, 0,
-		1, -1, 0],[
-		0, 2, 1,
-		2, 3, 1])
 }
 
 function createBullet() {
@@ -1036,9 +1055,9 @@ function createGround() {
 		for (var x = -radius, xe = radius - 1; x < xe; ++x) {
 			for (var j = 0; j < 6; ++j) {
 				var offset = (order[j] + i) * 3
-				v.push(vertices[offset])
-				v.push(vertices[offset + 1])
 				v.push(vertices[offset + 2])
+				v.push(vertices[offset + 1])
+				v.push(vertices[offset])
 			}
 			++i
 		}
@@ -1056,7 +1075,6 @@ function createObjects() {
 	var ground = createGround(),
 		jet = createJet(),
 		bullet = createBullet(),
-		plane = createPlane(),
 		tri = createTriangle(),
 		offsetHeight = 100
 
@@ -1149,16 +1167,13 @@ function init() {
 	}
 
 	createObjects()
-	cacheAttribLocations(program, [
-		'vertex',
-		'normal'])
+	cacheAttribLocations(program, ['vertex', 'normal'])
 	cacheUniformLocations(program, [
 		'mvp',
-		'mm',
+		'nm',
 		'light',
 		'color',
 		'sky',
-		'brightness',
 		'far'])
 
 	gl.enable(gl.DEPTH_TEST)
