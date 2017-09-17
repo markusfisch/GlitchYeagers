@@ -13,4 +13,4 @@ clean:
 	rm -f $(BUILD) $(ARCHIVE)
 
 up: $(BUILD)
-	scp $(BUILD) hhsw.de@ssh.strato.de:sites/proto/js13k2016/
+	scp $(BUILD) hhsw.de@ssh.strato.de:sites/GlitchYeagers/
