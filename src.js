@@ -669,68 +669,6 @@ function resize() {
 	invert(cm, vm)
 }
 
-function cacheUniformLocations(program, uniforms) {
-	if (program.uniforms === undefined) {
-		program.uniforms = {}
-	}
-	for (var i = 0, l = uniforms.length; i < l; ++i) {
-		var name = uniforms[i]
-		program.uniforms[name] = gl.getUniformLocation(program, name)
-	}
-}
-
-function cacheAttribLocations(program, attribs) {
-	if (program.attribs === undefined) {
-		program.attribs = {}
-	}
-	for (var i = 0, l = attribs.length; i < l; ++i) {
-		var name = attribs[i]
-		program.attribs[name] = gl.getAttribLocation(program, name)
-		gl.enableVertexAttribArray(program.attribs[name])
-	}
-}
-
-function compileShader(src, type) {
-	var shader = gl.createShader(type)
-
-	gl.shaderSource(shader, src)
-	gl.compileShader(shader)
-
-	return gl.getShaderParameter(shader, gl.COMPILE_STATUS) ?
-		shader :
-		null
-}
-
-function linkProgram(vs, fs) {
-	var p
-	if ((p = gl.createProgram())) {
-		gl.attachShader(p, vs)
-		gl.attachShader(p, fs)
-		gl.linkProgram(p)
-
-		if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-			gl.deleteProgram(p)
-			p = null
-		}
-	}
-
-	return p
-}
-
-function buildProgram(vertexSource, fragmentSource) {
-	var p, vs, fs
-	if ((vs = compileShader(vertexSource, gl.VERTEX_SHADER))) {
-		if ((fs = compileShader(fragmentSource, gl.FRAGMENT_SHADER))) {
-			p = linkProgram(vs, fs)
-			gl.deleteShader(fs)
-		}
-
-		gl.deleteShader(vs)
-	}
-
-	return p
-}
-
 function calculateNormals(vertices, indicies) {
 	var normals = []
 
@@ -1146,6 +1084,61 @@ function createObjects() {
 	entitiesLength = entities.length
 }
 
+function cacheUniformLocations(program, uniforms) {
+	if (program.uniforms === undefined) {
+		program.uniforms = {}
+	}
+	for (var i = 0, l = uniforms.length; i < l; ++i) {
+		var name = uniforms[i]
+		program.uniforms[name] = gl.getUniformLocation(program, name)
+	}
+}
+
+function cacheAttribLocations(program, attribs) {
+	if (program.attribs === undefined) {
+		program.attribs = {}
+	}
+	for (var i = 0, l = attribs.length; i < l; ++i) {
+		var name = attribs[i]
+		program.attribs[name] = gl.getAttribLocation(program, name)
+		gl.enableVertexAttribArray(program.attribs[name])
+	}
+}
+
+function compileShader(src, type) {
+	var shader = gl.createShader(type)
+	gl.shaderSource(shader, src)
+	gl.compileShader(shader)
+	return gl.getShaderParameter(shader, gl.COMPILE_STATUS) ? shader : null
+}
+
+function linkProgram(vs, fs) {
+	var p
+	if ((p = gl.createProgram())) {
+		gl.attachShader(p, vs)
+		gl.attachShader(p, fs)
+		gl.linkProgram(p)
+
+		if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+			gl.deleteProgram(p)
+			p = null
+		}
+	}
+	return p
+}
+
+function buildProgram(vertexSource, fragmentSource) {
+	var p, vs, fs
+	if ((vs = compileShader(vertexSource, gl.VERTEX_SHADER))) {
+		if ((fs = compileShader(fragmentSource, gl.FRAGMENT_SHADER))) {
+			p = linkProgram(vs, fs)
+			gl.deleteShader(fs)
+		}
+		gl.deleteShader(vs)
+	}
+	return p
+}
+
 function getContext() {
 	for (var canvas = D.getElementById('Canvas'),
 			ctx,
@@ -1166,7 +1159,6 @@ function init() {
 		return
 	}
 
-	createObjects()
 	cacheAttribLocations(program, ['vertex', 'normal'])
 	cacheUniformLocations(program, [
 		'mvp',
@@ -1175,6 +1167,8 @@ function init() {
 		'color',
 		'sky',
 		'far'])
+
+	createObjects()
 
 	gl.enable(gl.DEPTH_TEST)
 	gl.clearColor(colorSky[0], colorSky[1], colorSky[2], colorSky[3])
